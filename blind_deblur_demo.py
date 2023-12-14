@@ -111,8 +111,12 @@ def main():
     data_config = task_config['data']
     transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Grayscale(num_output_channels=1),
+                                    
                                     # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                                    transforms.Normalize(0.5, 0.5)])
+                                    # Careful with the normalization, it caused the reconstruction to fail
+                                    # transforms.Normalize(0.5, 0.5)
+                                    
+                                    ])
     dataset = get_dataset(**data_config, transforms=transform)
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
@@ -155,7 +159,7 @@ def main():
                 logger.info(f"{k} will use uniform prior.")
        
         # sample 
-        sample = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path)
+        sample = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path)
 
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
