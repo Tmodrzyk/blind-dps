@@ -162,12 +162,18 @@ class BlindBlurOperator(LinearOperator):
     def transpose(self, data, **kwargs):
         return data
     
+    # def apply_kernel(self, data, kernel):
+    #     #TODO: faster way to apply conv?:W
+        
+    #     b_img = torch.zeros_like(data).to(self.device)
+    #     for i in range(3):
+    #         b_img[:, i, :, :] = F.conv2d(data[:, i:i+1, :, :], kernel, padding='same')
+    #     return b_img
     def apply_kernel(self, data, kernel):
         #TODO: faster way to apply conv?:W
         
         b_img = torch.zeros_like(data).to(self.device)
-        for i in range(3):
-            b_img[:, i, :, :] = F.conv2d(data[:, i:i+1, :, :], kernel, padding='same')
+        b_img = F.conv2d(data[:, 0, :, :], kernel, padding='same')
         return b_img
 
 @register_operator(name='turbulence')

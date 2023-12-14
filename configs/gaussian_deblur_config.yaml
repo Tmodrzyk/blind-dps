@@ -1,6 +1,7 @@
 kernel: gaussian
 kernel_size: 64
-intensity: 3.0
+intensity: 0
+kernel_std: 1.0
 
 conditioning:
   method: ps
@@ -9,12 +10,12 @@ conditioning:
 
 data:
   name: ffhq
-  root: ./data/samples
+  root: ./data/ellipse_samples/
 
 measurement:
   operator:
     name: blind_blur
-  
+
   noise: 
     name: gaussian
-    sigma: 0.02
+    sigma: 0

@@ -46,6 +46,9 @@ def clear_color(x: torch.Tensor) -> np.ndarray:
     elif x.shape[1] == 1:
         x = x.detach().cpu().squeeze().numpy()
         return normalize_np(x)
+    elif x.shape[0] == 1:
+        x = x.detach().cpu().squeeze().numpy()
+        return normalize_np(x)
     else:
         raise NotImplementedError
      

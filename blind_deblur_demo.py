@@ -10,7 +10,12 @@ import matplotlib.pyplot as plt
 
 from guided_diffusion.blind_condition_methods import get_conditioning_method
 from guided_diffusion.measurements import get_operator, get_noise
-from guided_diffusion.unet import create_model
+
+# Here replaces the regular unet by our trained unet
+# from guided_diffusion.unet import create_model
+import guided_diffusion.diffusion_model_unet 
+import guided_diffusion.unet
+
 from guided_diffusion.gaussian_diffusion import create_sampler
 from data.dataloader import get_dataset, get_dataloader
 from motionblur.motionblur import Kernel
@@ -58,12 +63,14 @@ def main():
     args.kernel = task_config["kernel"]
     args.kernel_size = task_config["kernel_size"]
     args.intensity = task_config["intensity"]
-   
+    args.kernel_std = task_config["kernel_std"]
+    
     # Load model
-    img_model = create_model(**img_model_config)
+    img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
     img_model = img_model.to(device)
     img_model.eval()
-    kernel_model = create_model(**kernel_model_config)
+
+    kernel_model = guided_diffusion.unet.create_model(**kernel_model_config)
     kernel_model = kernel_model.to(device)
     kernel_model.eval()
     model = {'img': img_model, 'kernel': kernel_model}
@@ -103,7 +110,9 @@ def main():
     # Prepare dataloader
     data_config = task_config['data']
     transform = transforms.Compose([transforms.ToTensor(),
-                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+                                    transforms.Grayscale(num_output_channels=1),
+                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                                    transforms.Normalize(0.5, 0.5)])
     dataset = get_dataset(**data_config, transforms=transform)
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
@@ -121,18 +130,22 @@ def main():
             kernel = torch.from_numpy(kernel).type(torch.float32)
             kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
         elif args.kernel == 'gaussian':
-            conv = Blurkernel('gaussian', kernel_size=args.kernel_size, device=device)
+            conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.kernel_std, device=device)
             kernel = conv.get_kernel().type(torch.float32)
             kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
         
         # Forward measurement model (Ax + n)
         y = operator.forward(ref_img, kernel)
+        y0 = operator.forward(ref_img, kernel)
         y_n = noiser(y)
-        
+
         # Set initial sample 
         # !All values will be given to operator.forward(). Please be aware it.
         x_start = {'img': torch.randn(ref_img.shape, device=device).requires_grad_(),
                    'kernel': torch.randn(kernel.shape, device=device).requires_grad_()}
+        
+        # x_start = {'img': y0,
+        #            'kernel': torch.randn(kernel.shape, device=device).requires_grad_()}
         
         # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
         for k in x_start:

@@ -45,23 +45,25 @@ class BlindConditioningMethod(ConditioningMethod):
                 "Keys of x_prev and x_0_hat should be identical."
 
             keys = sorted(x_prev.keys())
-            x_prev_values = [x[1] for x in sorted(x_prev.items())] 
-            x_0_hat_values = [x[1] for x in sorted(x_0_hat.items())]
             
-            difference = measurement - self.operator.forward(*x_0_hat_values)
-            norm = torch.linalg.norm(difference)
+            with torch.autograd.set_detect_anomaly(True):
+                x_prev_values = [x[1] for x in sorted(x_prev.items())] 
+                x_0_hat_values = [x[1] for x in sorted(x_0_hat.items())]
+                
+                difference = measurement - self.operator.forward(*x_0_hat_values)
+                norm = torch.linalg.norm(difference)
 
-            reg_info = kwargs.get('regularization', None)
-            if reg_info is not None:
-                for reg_target in reg_info:
-                    assert reg_target in keys, \
-                        f"Regularization target {reg_target} does not exist in x_0_hat."
+                reg_info = kwargs.get('regularization', None)
+                if reg_info is not None:
+                    for reg_target in reg_info:
+                        assert reg_target in keys, \
+                            f"Regularization target {reg_target} does not exist in x_0_hat."
 
-                    reg_ord, reg_scale = reg_info[reg_target]
-                    if reg_scale != 0.0:  # if got scale 0, skip calculating.
-                        norm += reg_scale * torch.linalg.norm(x_0_hat[reg_target].view(-1), ord=reg_ord)                        
-                    
-            norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
+                        reg_ord, reg_scale = reg_info[reg_target]
+                        if reg_scale != 0.0:  # if got scale 0, skip calculating.
+                            norm = norm + reg_scale * torch.linalg.norm(x_0_hat[reg_target].view(-1), ord=reg_ord)                        
+
+                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
             
         else:
             raise NotImplementedError
