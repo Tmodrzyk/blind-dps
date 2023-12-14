@@ -1661,7 +1661,7 @@ def create_model(
     upcast_attention: bool = False,
     use_flash_attention: bool = False,
     dropout_cattn: float = 0.0,
-    model_path: str='/home/modrzyk/code/blind-dps/models/custom_image_weights.pth',
+    model_path: str='/home/modrzyk/code/blind-dps/models/custom_image_weights_64.pth',
 ):
 
     model= DiffusionModelUNet(

@@ -1,7 +1,7 @@
 kernel: gaussian
 kernel_size: 64
 intensity: 0
-kernel_std: 1.0
+kernel_std: 3.0
 
 conditioning:
   method: ps
