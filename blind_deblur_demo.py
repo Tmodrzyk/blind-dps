@@ -36,9 +36,11 @@ def main():
     parser.add_argument('--kernel_model_config', type=str, default='configs/kernel_model_config.yaml')
     parser.add_argument('--diffusion_config', type=str, default='configs/diffusion_config.yaml')
     parser.add_argument('--task_config', type=str, default='configs/motion_deblur_config.yaml')
+    
     # Training
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--save_dir', type=str, default='./results')
+    
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
     parser.add_argument('--reg_ord', type=int, default=0, choices=[0, 1])
