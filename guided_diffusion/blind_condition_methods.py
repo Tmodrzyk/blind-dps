@@ -39,7 +39,7 @@ class BlindConditioningMethod(ConditioningMethod):
                        measurement: torch.Tensor,
                        **kwargs):
 
-        if self.noiser.__name__ == 'gaussian' or self.noiser is None:  # why none?
+        if self.noiser.__name__ == 'gaussian' or self.noiser.__name__ == 'poisson' or self.noiser is None:  # why none?
             
             assert sorted(x_prev.keys()) == sorted(x_0_hat.keys()), \
                 "Keys of x_prev and x_0_hat should be identical."

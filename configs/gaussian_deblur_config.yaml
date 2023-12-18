@@ -17,5 +17,7 @@ measurement:
     name: blind_blur
 
   noise: 
+    # name: poisson
+    # rate: 0.5
     name: gaussian
-    sigma: 0
+    sigma: 0.02
