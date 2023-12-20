@@ -8,7 +8,7 @@ data:
 intensity: 0
 kernel: gaussian
 kernel_size: 64
-kernel_std: 6.0
+kernel_std: [[6, 1], [4, 8]]
 measurement:
   noise:
     name: gaussian
