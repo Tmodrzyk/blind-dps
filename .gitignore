@@ -1,3 +1,13 @@
 models/*
 results/*
+<<<<<<< HEAD
 */__pycache__/*
+=======
+
+*/__pycache__/*
+*/.ipynb_checkpoints/*
+*/.pytest_cache/*
+*/.mypy_cache/*
+*/.coverage
+__pycache__
+>>>>>>> b8f4d86bbbfcaa202083d9d6f33c4c421cedd25e

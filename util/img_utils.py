@@ -7,6 +7,7 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 from motionblur.motionblur import Kernel
 from .fastmri_utils import fft2c_new, ifft2c_new
+from scipy.stats import multivariate_normal
 
 
 """
@@ -279,11 +280,14 @@ class Blurkernel(nn.Module):
     def forward(self, x):
         return self.seq(x)
 
+
     def weights_init(self):
         if self.blur_type == "gaussian":
-            n = np.zeros((self.kernel_size, self.kernel_size))
-            n[self.kernel_size // 2,self.kernel_size // 2] = 1
-            k = scipy.ndimage.gaussian_filter(n, sigma=self.std)
+            mean = [self.kernel_size // 2, self.kernel_size // 2]
+            cov = self.std
+            x, y = np.meshgrid(np.arange(self.kernel_size), np.arange(self.kernel_size))
+            pos = np.dstack((x, y))
+            k = multivariate_normal.pdf(pos, mean, cov, allow_singular=False)
             k = torch.from_numpy(k)
             self.k = k
             for name, f in self.named_parameters():
