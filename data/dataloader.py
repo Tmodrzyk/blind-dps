@@ -47,7 +47,7 @@ class FFHQDataset(VisionDataset):
 
     def __getitem__(self, index: int):
         fpath = self.fpaths[index]
-        img = Image.open(fpath).convert('RGB')
+        img = Image.open(fpath).convert('L')
         
         if self.transforms is not None:
             img = self.transforms(img)

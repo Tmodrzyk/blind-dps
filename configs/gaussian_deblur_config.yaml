@@ -4,7 +4,7 @@ conditioning:
     scale: 0.3
 data:
   name: ffhq
-  root: ./data/ellipse_samples/
+  root: ./data/brain_samples/
 intensity: 0
 kernel: gaussian
 kernel_size: 64
@@ -12,6 +12,6 @@ kernel_std: [[6, 1], [4, 8]]
 measurement:
   noise:
     name: gaussian
-    sigma: 0.02
+    sigma: 0.01
   operator:
     name: blind_blur
