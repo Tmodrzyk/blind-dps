@@ -5,5 +5,7 @@ results/*
 */.pytest_cache/*
 */.mypy_cache/*
 */.coverage
-__pycache__
+/__pycache__/*
+__pycache__/
+
 
