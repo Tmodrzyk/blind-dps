@@ -25,11 +25,11 @@ for idx in tqdm(range(1)):
     fname = 'img_' + str(idx).zfill(5)
 
     label = plt.imread(os.path.join(label_root, f'{fname}.png'))
-    normal_recon = plt.imread(os.path.join(label_root, f'{fname}.png'))
+    normal_recon = plt.imread(os.path.join(normal_recon_root, f'{fname}.png'))
 
     psnr_normal = peak_signal_noise_ratio(label, normal_recon)
     psnr_normal_list.append(psnr_normal)
-
+    
 psnr_normal_avg = sum(psnr_normal_list) / len(psnr_normal_list)
 
 print(f'Normal PSNR: {psnr_normal_avg}')
