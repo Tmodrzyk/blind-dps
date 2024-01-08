@@ -173,7 +173,7 @@ class BlindBlurOperator(LinearOperator):
         #TODO: faster way to apply conv?:W
         
         b_img = torch.zeros_like(data).to(self.device)
-        b_img = F.conv2d(data[:, 0, :, :], kernel, padding='same')
+        b_img = F.conv2d(data[:, :, :, :], kernel, padding='same')
         return b_img
 
 @register_operator(name='turbulence')
