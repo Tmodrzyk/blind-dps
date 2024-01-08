@@ -119,16 +119,16 @@ def main():
                                     # transforms.Normalize(0.5, 0.5)
                                     
                                     ])
-    batch_size = 4 
     dataset = get_dataset(**data_config, transforms=transform)
-    loader = get_dataloader(dataset, batch_size=batch_size, num_workers=0, train=False)
+    loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
     # set seed for reproduce
     np.random.seed(123)
     
     # Do Inference
     for i, ref_img in enumerate(loader):
-        logger.info(f"Inference for batch {i}")
+        logger.info(f"Inference for image {i}")
+        fname = str(i).zfill(5) + '.png'
         ref_img = ref_img.to(device)
 
         if args.kernel == 'motion':
@@ -139,7 +139,6 @@ def main():
             conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.kernel_std, device=device)
             kernel = conv.get_kernel().type(torch.float32)
             kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
-            kernel = kernel.repeat(4, 1, 1, 1)
         
         # Forward measurement model (Ax + n)
         y = operator.forward(ref_img, kernel)
@@ -163,14 +162,12 @@ def main():
        
         # sample 
         sample = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path)
-        
-        for batch_idx in range(batch_size):
-            fname = str(i * batch_size + batch_idx).zfill(5) + '.png'
-            plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n[batch_idx]))
-            plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel[batch_idx]))
-            plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img[batch_idx]))
-            plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img'][batch_idx]))
-            plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel'][batch_idx]))
+
+        plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
+        plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
+        plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
+        plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
+        plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
 
 if __name__ == '__main__':
     main()

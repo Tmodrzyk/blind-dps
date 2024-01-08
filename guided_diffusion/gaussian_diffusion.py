@@ -367,7 +367,6 @@ class DDPM(SpacedDiffusion):
         sample = out['mean']
 
         noise = torch.randn_like(x)
-        
         if t != 0:  # no noise when t == 0
             noisy_sample = sample + torch.exp(0.5 * out['log_variance']) * noise
         else:
@@ -424,10 +423,10 @@ class BlindDPS(DDPM):
         x_prev = x_start 
         device = list(x_prev.values())[0].device 
         batch_size = list(x_prev.values())[0].shape[0]
-        pbar = tqdm(list(range(self.num_timesteps))[::-1])
         
+        pbar = tqdm(list(range(self.num_timesteps))[::-1])
         for idx in pbar:
-            time = torch.tensor([idx], device=device)
+            time = torch.tensor([idx] * batch_size, device=device)
 
             x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
             
@@ -474,10 +473,9 @@ class BlindDPS(DDPM):
                         save_dir = os.path.join(save_root, f'progress/{k}')
                         if not os.path.isdir(save_dir):
                             os.makedirs(save_dir, exist_ok=True)
-                            
-                        for(batch_idx, img) in enumerate(clear_color(v)):
-                            file_path = os.path.join(save_dir, f"x_{str(batch_idx)}_{str(idx).zfill(4)}.png")
-                            plt.imsave(file_path, img)
+                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                        plt.imsave(file_path, clear_color(v))
+# 
         return updated
 
 # =================
