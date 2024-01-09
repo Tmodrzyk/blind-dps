@@ -441,10 +441,10 @@ class BlindDPS(DDPM):
                     output.update({k: x_prev[k]})
         
             # Normalize the kernel (TODO: can we generalize this part?)
-            kernel_hatx0 = output['kernel']['pred_xstart'] 
-            kernel_hatx0 = (kernel_hatx0 + 1.0) / 2.0
-            kernel_hatx0 /= kernel_hatx0.sum()
-            output['kernel'].update({'pred_xstart': kernel_hatx0})
+            kernel_0_hat = output['kernel']['pred_xstart'] 
+            kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
+            kernel_0_hat /= kernel_0_hat.sum()
+            output['kernel'].update({'pred_xstart': kernel_0_hat})
 
             # give condition
             noisy_measurement = self.q_sample(measurement, t=time)
