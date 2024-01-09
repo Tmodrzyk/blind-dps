@@ -2,15 +2,17 @@ conditioning:
   method: ps
   params:
     scale: 0.3
-    # scale: 0
+    # scale: 0.3
 
 data:
   name: ffhq
   root: ./data/ellipse_samples/
+
 intensity: 0
 kernel: gaussian
 kernel_size: 64
 kernel_std: [[3, 0], [0, 3]]
+
 measurement:
   noise:
     name: gaussian

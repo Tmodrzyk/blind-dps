@@ -442,6 +442,7 @@ class BlindDPS(DDPM):
         
             # Normalize the kernel (TODO: can we generalize this part?)
             kernel_0_hat = output['kernel']['pred_xstart'] 
+            # Projection
             kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
             kernel_0_hat /= kernel_0_hat.sum()
             output['kernel'].update({'pred_xstart': kernel_0_hat})
@@ -468,16 +469,16 @@ class BlindDPS(DDPM):
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
 
             if record:
-                if idx % 10 == 0:
+                if idx % 2 == 0:
                     for k, v in updated.items():
                         save_dir = os.path.join(save_root, f'progress/{k}')
                         if not os.path.isdir(save_dir):
                             os.makedirs(save_dir, exist_ok=True)
                         file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
                         plt.imsave(file_path, clear_color(v))
-# 
+ 
         return updated
-
+    
 # =================
 # Helper functions
 # =================
@@ -495,8 +496,11 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # Linear schedule from Ho et al, extended to work for any number of
         # diffusion steps.
         scale = 1000 / num_diffusion_timesteps
-        beta_start = scale * 0.0001
-        beta_end = scale * 0.02
+        # beta_start = scale * 0.0001
+        # beta_end = scale * 0.02
+        beta_start = scale * 0.00001
+        beta_end = scale * 0.0001
+
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
