@@ -64,7 +64,6 @@ class BlindConditioningMethod(ConditioningMethod):
                             norm = norm + reg_scale * torch.linalg.norm(x_0_hat[reg_target].view(-1), ord=reg_ord)                        
 
                 norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
-            
         else:
             raise NotImplementedError
         

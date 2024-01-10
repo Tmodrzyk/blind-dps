@@ -71,7 +71,8 @@ def main():
     img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
     img_model = img_model.to(device)
     img_model.eval()
-
+    
+    # kernel_model = guided_diffusion.diffusion_model_unet.create_model(**kernel_model_config)
     kernel_model = guided_diffusion.unet.create_model(**kernel_model_config)
     kernel_model = kernel_model.to(device)
     kernel_model.eval()

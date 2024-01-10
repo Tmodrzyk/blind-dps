@@ -446,7 +446,7 @@ class BlindDPS(DDPM):
             kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
             kernel_0_hat /= kernel_0_hat.sum()
             output['kernel'].update({'pred_xstart': kernel_0_hat})
-
+            
             # give condition
             noisy_measurement = self.q_sample(measurement, t=time)
             x_t = dict((k, v['sample']) for k, v in output.items())
@@ -496,14 +496,25 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # Linear schedule from Ho et al, extended to work for any number of
         # diffusion steps.
         scale = 1000 / num_diffusion_timesteps
-        # beta_start = scale * 0.0001
-        # beta_end = scale * 0.02
+        beta_start = scale * 0.0001
+        beta_end = scale * 0.02
+
+        return np.linspace(
+            beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
+        )
+        
+    if schedule_name == "fast":
+        # Linear schedule from Ho et al, extended to work for any number of
+        # diffusion steps.
+        scale = 1000 / num_diffusion_timesteps
+
         beta_start = scale * 0.00001
         beta_end = scale * 0.0001
 
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
+        
     elif schedule_name == "cosine":
         return betas_for_alpha_bar(
             num_diffusion_timesteps,
