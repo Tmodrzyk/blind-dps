@@ -3,7 +3,7 @@ conditioning:
   params:
     scale: 0.3
     # scale: 0.3
-
+  
 data:
   name: ffhq
   root: ./data/ellipse_samples/

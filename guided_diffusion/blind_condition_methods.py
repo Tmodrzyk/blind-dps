@@ -60,8 +60,11 @@ class BlindConditioningMethod(ConditioningMethod):
                             f"Regularization target {reg_target} does not exist in x_0_hat."
 
                         reg_ord, reg_scale = reg_info[reg_target]
-                        if reg_scale != 0.0:  # if got scale 0, skip calculating.
+                        if reg_scale != 0.0:  # if got scale 0, skip calculating.                            
                             norm = norm + reg_scale * torch.linalg.norm(x_0_hat[reg_target].view(-1), ord=reg_ord)                        
+                            
+                            # TV regularization
+                            # norm = norm + reg_scale * total_variation(x_0_hat[reg_target])
 
                 norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
         else:
@@ -88,3 +91,12 @@ class PosteriorSampling(BlindConditioningMethod):
             x_t.update({k: x_t[k] - scale[k]*norm_grad[k]})            
         
         return x_t, norm
+    
+    
+## HELPER FUNCTIONS
+
+def total_variation(img):
+     bs_img, c_img, h_img, w_img = img.size()
+     tv_h = torch.pow(img[:,:,1:,:]-img[:,:,:-1,:], 2).sum()
+     tv_w = torch.pow(img[:,:,:,1:]-img[:,:,:,:-1], 2).sum()
+     return (tv_h+tv_w)/(bs_img*c_img*h_img*w_img)
