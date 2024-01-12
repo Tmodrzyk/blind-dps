@@ -36,6 +36,7 @@ class BlindConditioningMethod(ConditioningMethod):
     def grad_and_value(self, 
                        x_prev: Dict[str, torch.Tensor], 
                        x_0_hat: Dict[str, torch.Tensor], 
+                       x_0_hat_prev: Dict[str, torch.Tensor],
                        measurement: torch.Tensor,
                        **kwargs):
 
@@ -48,10 +49,12 @@ class BlindConditioningMethod(ConditioningMethod):
             
             with torch.autograd.set_detect_anomaly(True):
                 x_prev_values = [x[1] for x in sorted(x_prev.items())] 
-                x_0_hat_values = [x[1] for x in sorted(x_0_hat.items())]
+                x_0_hat_prev_values = [x[1] for x in sorted(x_0_hat_prev.items())]
                 
-                difference = measurement - self.operator.forward(*x_0_hat_values)
+                difference = measurement - self.operator.forward(*x_0_hat_prev_values)
                 norm = torch.linalg.norm(difference)
+
+                ## Begin lines 12 of Algorithm 1
 
                 reg_info = kwargs.get('regularization', None)
                 if reg_info is not None:
@@ -63,7 +66,11 @@ class BlindConditioningMethod(ConditioningMethod):
                         if reg_scale != 0.0:  # if got scale 0, skip calculating.
                             norm = norm + reg_scale * torch.linalg.norm(x_0_hat[reg_target].view(-1), ord=reg_ord)                        
 
-                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
+                ## End lines 12 of Algorithm 1
+                
+                # norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
+                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_0_hat_prev_values)
+                
         else:
             raise NotImplementedError
         
@@ -76,15 +83,18 @@ class PosteriorSampling(BlindConditioningMethod):
         assert kwargs.get('scale') is not None
         self.scale = kwargs.get('scale')
 
-    def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
-        norm_grad, norm = self.grad_and_value(x_prev, x_0_hat, measurement, **kwargs)
+    def conditioning(self, x_prev, x_0_hat, x_0_hat_prev, measurement, **kwargs):
+        norm_grad, norm = self.grad_and_value(x_prev, x_0_hat, x_0_hat_prev, measurement, **kwargs)
 
         scale = kwargs.get('scale')
         if scale is None:
             scale = self.scale
-         
+        
+        ## Begin lines 11-13 of Algorithm 1 
         keys = sorted(x_prev.keys())
         for k in keys:
-            x_t.update({k: x_t[k] - scale[k]*norm_grad[k]})            
+            x_0_hat.update({k: x_0_hat[k] - scale[k]*norm_grad[k]})   
+                     
+        ## End lines 11-13 of Algorithm 1
         
-        return x_t, norm
+        return x_0_hat, norm

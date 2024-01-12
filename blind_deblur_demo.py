@@ -150,6 +150,8 @@ def main():
         # x_start = {'img': torch.randn(ref_img.shape, device=device).requires_grad_(),
         #            'kernel': torch.randn(kernel.shape, device=device).requires_grad_()}
         
+        # dirac_kernel = torch.ones(kernel.shape, device=device)
+        
         dirac_kernel = torch.zeros(kernel.shape, device=device)
         center_index = (0, 0, kernel.shape[2] // 2, kernel.shape[3] // 2)
         dirac_kernel[center_index] = 1.0
@@ -165,13 +167,14 @@ def main():
                 logger.info(f"{k} will use uniform prior.")
        
         # sample 
-        sample = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path)
+        sample = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path)
 
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
         plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
         plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
-
+        
+        break
 if __name__ == '__main__':
     main()

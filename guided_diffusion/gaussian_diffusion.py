@@ -370,7 +370,7 @@ class DDPM(SpacedDiffusion):
         if t != 0:  # no noise when t == 0
             noisy_sample = sample + torch.exp(0.5 * out['log_variance']) * noise
         else:
-            noisy_sample = sample + noise * t
+            noisy_sample = sample 
 
         return {'sample': noisy_sample, 'pred_xstart': out['pred_xstart']}
     
@@ -407,6 +407,7 @@ class DDIM(SpacedDiffusion):
         coef2 = extract_and_expand(self.sqrt_recipm1_alphas_cumprod, t, x_t)
         return (coef1 * x_t - pred_xstart) / coef2
 
+
 @register_sampler(name='blind_dps')
 class BlindDPS(DDPM):
     def p_sample_loop(self, 
@@ -425,59 +426,101 @@ class BlindDPS(DDPM):
         batch_size = list(x_prev.values())[0].shape[0]
         
         pbar = tqdm(list(range(self.num_timesteps))[::-1])
+        
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
 
             x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
+            # plt.imshow(x_prev['img'].squeeze().detach().cpu().numpy())
+            # plt.show()
             
             # diffusion prior cases 
             output = dict() 
+            
+            ## Begin lines 3-6 and 9-10 in Algorithm 1
+            
             for k in model:
                 output.update({k: self.p_sample(x=x_prev[k], t=time, model=model[k])})  
             
+            if(idx == self.num_timesteps - 1):
+                x_0_hat = dict((k, v['pred_xstart']) for k, v in output.items())
+            
+            # plt.imshow(x_0_hat['kernel'].squeeze().detach().cpu().numpy())
+            # plt.colorbar()
+            # plt.show()
+            
             # uniform prior cases 
-            for k in x_prev:
-                if output.get(k, None) is None:
-                    output.update({k: x_prev[k]})
-        
+            # for k in x_prev:
+            #     if output.get(k, None) is None:
+            #         output.update({k: x_prev[k]})
+
+
             # Normalize the kernel (TODO: can we generalize this part?)
-            kernel_0_hat = output['kernel']['pred_xstart'] 
+            kernel_0_hat = x_0_hat['kernel']
+            
+            ## End lines 3-6 and 9-10 in Algorithm 1
+            
+            ## Begin line 7 Algorithm 1
+            
             # Projection
             kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
             kernel_0_hat /= kernel_0_hat.sum()
-            output['kernel'].update({'pred_xstart': kernel_0_hat})
+            x_0_hat.update({'kernel': kernel_0_hat})
+            
+            ## End line 7 Algorithm 1
             
             # give condition
             noisy_measurement = self.q_sample(measurement, t=time)
-            x_t = dict((k, v['sample']) for k, v in output.items())
-            x_0_hat = dict((k, v['pred_xstart']) for k, v in output.items())
+
+            # x_t = dict((k, v['sample']) for k, v in x_0_hat.items())
+            x_0_hat_prev = dict((k, v['pred_xstart'].requires_grad_()) for k, v in output.items())
+            
+            # Projection
+            kernel_0_hat = x_0_hat_prev['kernel']
+            kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
+            kernel_0_hat /= kernel_0_hat.sum()
+            x_0_hat_prev.update({'kernel': kernel_0_hat})
+            
+            ## Begin line 8-13 Algorithm 1
             
             # Here, we implement gradually increasing scale that shows stable performance,
             # while we reported the result with a constant scale in the paper.
             scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
+            # scale = 1.0
             scale = {k: scale for k in output.keys()}
-            updated, norm = measurement_cond_fn(x_t=x_t,
+            
+            updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
                                                 measurement=measurement,
                                                 noisy_measurement=noisy_measurement,
                                                 x_prev=x_prev,
-                                                x_0_hat=x_0_hat,
+                                                x_0_hat_prev=x_0_hat_prev,
                                                 scale=scale)
+            ## End line 8-13 Algorithm 1
             
             updated = dict((k, v.detach_()) for k, v in updated.items())
-            x_prev = updated
 
+            # for k in model:
+            #     x_prev.update({k: output[k]['sample'].detach_()})  
+                
+            x_0_hat = updated
+            
+            time = torch.tensor([idx-1] * batch_size, device=device)
+            
+            for k in model:
+                x_prev.update({k: self.q_sample(x_0_hat[k], t=time)}) 
+                
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
 
             if record:
-                if idx % 2 == 0:
-                    for k, v in updated.items():
+                if idx % 1 == 0:
+                    for k, v in x_0_hat.items():
                         save_dir = os.path.join(save_root, f'progress/{k}')
                         if not os.path.isdir(save_dir):
                             os.makedirs(save_dir, exist_ok=True)
                         file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
                         plt.imsave(file_path, clear_color(v))
- 
-        return updated
+
+        return x_0_hat
     
 # =================
 # Helper functions
