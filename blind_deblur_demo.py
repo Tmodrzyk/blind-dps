@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results')
+    parser.add_argument('--save_dir', type=str, default='./results/L1')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -165,13 +165,14 @@ def main():
                 logger.info(f"{k} will use uniform prior.")
        
         # sample 
-        sample = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path)
+        sample = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path)
 
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
         plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
         plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
-
+        break
+    
 if __name__ == '__main__':
     main()

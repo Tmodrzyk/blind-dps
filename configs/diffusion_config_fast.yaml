@@ -1,5 +1,6 @@
 sampler: blind_dps
 steps: 100
+# noise_schedule: linear
 noise_schedule: fast
 model_mean_type: epsilon 
 model_var_type: learned_range
