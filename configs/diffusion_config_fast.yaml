@@ -1,10 +1,10 @@
 sampler: blind_dps
-steps: 100
-# noise_schedule: linear
-noise_schedule: fast
+steps: 1000
+noise_schedule: linear
+# noise_schedule: fast
 model_mean_type: epsilon 
 model_var_type: learned_range
 dynamic_threshold: False
 clip_denoised: True
 rescale_timesteps: False
-timestep_respacing: 100
+timestep_respacing: 1000
