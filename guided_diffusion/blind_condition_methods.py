@@ -68,8 +68,8 @@ class BlindConditioningMethod(ConditioningMethod):
 
                 ## End lines 12 of Algorithm 1
                 
-                # norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
-                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_0_hat_prev_values)
+                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
+                # norm_grad = torch.autograd.grad(outputs=norm, inputs=x_0_hat_prev_values)
                 
         else:
             raise NotImplementedError

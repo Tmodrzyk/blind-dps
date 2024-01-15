@@ -485,8 +485,8 @@ class BlindDPS(DDPM):
             
             # Here, we implement gradually increasing scale that shows stable performance,
             # while we reported the result with a constant scale in the paper.
-            scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            # scale = 1.0
+            # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
+            scale = 0.1
             scale = {k: scale for k in output.keys()}
             
             updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
@@ -558,8 +558,8 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # diffusion steps.
         scale = 1000 / num_diffusion_timesteps
 
-        beta_start = scale * 0.00001
-        beta_end = scale * 0.0001
+        beta_start = scale * 0.000001
+        beta_end = scale * 0.0002
 
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64

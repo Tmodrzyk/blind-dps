@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results')
+    parser.add_argument('--save_dir', type=str, default='./results/L2')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -147,17 +147,15 @@ def main():
 
         # Set initial sample 
         # !All values will be given to operator.forward(). Please be aware it.
-        x_start = {'img': torch.randn(ref_img.shape, device=device).requires_grad_(),
-                   'kernel': torch.randn(kernel.shape, device=device).requires_grad_()}
+        # x_start = {'img': torch.randn(ref_img.shape, device=device).requires_grad_(),
+        #            'kernel': torch.randn(kernel.shape, device=device).requires_grad_()}
         
-        # dirac_kernel = torch.ones(kernel.shape, device=device)
-        
-        # dirac_kernel = torch.zeros(kernel.shape, device=device)
-        # center_index = (0, 0, kernel.shape[2] // 2, kernel.shape[3] // 2)
-        # dirac_kernel[center_index] = 1.0
+        dirac_kernel = torch.zeros(kernel.shape, device=device)
+        center_index = (0, 0, kernel.shape[2] // 2, kernel.shape[3] // 2)
+        dirac_kernel[center_index] = 1.0
 
-        # x_start = {'img': y_n.unsqueeze(0).requires_grad_(),
-        #            'kernel': dirac_kernel.requires_grad_()}
+        x_start = {'img': y_n.unsqueeze(0).requires_grad_(),
+                   'kernel': dirac_kernel.requires_grad_()}
         
         # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
         for k in x_start:
@@ -174,7 +172,7 @@ def main():
         plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
         plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
-        
         break
+    
 if __name__ == '__main__':
     main()
