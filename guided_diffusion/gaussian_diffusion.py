@@ -503,18 +503,25 @@ class BlindDPS(DDPM):
             #     x_prev.update({k: output[k]['sample'].detach_()})  
                 
             x_0_hat = updated
-            
-            time = torch.tensor([idx-1] * batch_size, device=device)
-            
-            for k in model:
-                x_prev.update({k: self.q_sample(x_0_hat[k], t=time)}) 
+            if(idx > 0):
+                time = torch.tensor([idx-1] * batch_size, device=device)
+                
+                for k in model:
+                    x_prev.update({k: self.q_sample(x_0_hat[k], t=time)}) 
                 
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
 
             if record:
                 if idx % 1 == 0:
                     for k, v in x_0_hat.items():
-                        save_dir = os.path.join(save_root, f'progress/{k}')
+                        save_dir = os.path.join(save_root, f'progress_x_0_hat/{k}')
+                        if not os.path.isdir(save_dir):
+                            os.makedirs(save_dir, exist_ok=True)
+                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                        plt.imsave(file_path, clear_color(v))
+                        
+                    for k, v in x_prev.items():
+                        save_dir = os.path.join(save_root, f'progress_x_t/{k}')
                         if not os.path.isdir(save_dir):
                             os.makedirs(save_dir, exist_ok=True)
                         file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
