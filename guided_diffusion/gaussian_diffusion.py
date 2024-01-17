@@ -8,6 +8,8 @@ from tqdm.auto import tqdm
 
 from util.img_utils import clear_color
 from .posterior_mean_variance import get_mean_processor, get_var_processor
+import numpy as np
+import os
 
 
 
@@ -410,6 +412,7 @@ class DDIM(SpacedDiffusion):
 
 @register_sampler(name='blind_dps')
 class BlindDPS(DDPM):
+    import matplotlib.pyplot as plt
     def p_sample_loop(self, 
                       model: dict,
                       x_start: dict,
@@ -427,17 +430,19 @@ class BlindDPS(DDPM):
         
         pbar = tqdm(list(range(self.num_timesteps))[::-1])
         
+        norm_array = []  # Array to store the norm values
+        
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
-
             x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
-            # plt.imshow(x_prev['img'].squeeze().detach().cpu().numpy())
-            # plt.show()
             
+            # Noise the inputs
+            if(idx == self.num_timesteps-1):
+                for k in model:
+                    x_prev.update({k: self.q_sample(x_start[k], t=time)})
+
             # diffusion prior cases 
             output = dict() 
-            
-            ## Begin lines 3-6 and 9-10 in Algorithm 1
             
             for k in model:
                 output.update({k: self.p_sample(x=x_prev[k], t=time, model=model[k])})  
@@ -456,18 +461,14 @@ class BlindDPS(DDPM):
 
 
             # Normalize the kernel (TODO: can we generalize this part?)
-            kernel_0_hat = x_0_hat['kernel']
             
-            ## End lines 3-6 and 9-10 in Algorithm 1
-            
-            ## Begin line 7 Algorithm 1
             
             # Projection
-            kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
-            kernel_0_hat /= kernel_0_hat.sum()
-            x_0_hat.update({'kernel': kernel_0_hat})
+            # kernel_0_hat = x_0_hat['kernel']
+            # kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
+            # kernel_0_hat /= kernel_0_hat.sum()
+            # x_0_hat.update({'kernel': kernel_0_hat})
             
-            ## End line 7 Algorithm 1
             
             # give condition
             noisy_measurement = self.q_sample(measurement, t=time)
@@ -481,13 +482,13 @@ class BlindDPS(DDPM):
             kernel_0_hat /= kernel_0_hat.sum()
             x_0_hat_prev.update({'kernel': kernel_0_hat})
             
-            ## Begin line 8-13 Algorithm 1
-            
             # Here, we implement gradually increasing scale that shows stable performance,
             # while we reported the result with a constant scale in the paper.
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            scale = 0.1
+            scale = 10*(idx / self.num_timesteps) 
+            # scale = 10.0
             scale = {k: scale for k in output.keys()}
+            
             
             updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
                                                 measurement=measurement,
@@ -495,7 +496,6 @@ class BlindDPS(DDPM):
                                                 x_prev=x_prev,
                                                 x_0_hat_prev=x_0_hat_prev,
                                                 scale=scale)
-            ## End line 8-13 Algorithm 1
             
             updated = dict((k, v.detach_()) for k, v in updated.items())
 
@@ -503,13 +503,38 @@ class BlindDPS(DDPM):
             #     x_prev.update({k: output[k]['sample'].detach_()})  
                 
             x_0_hat = updated
+            
+            kernel_0_hat = x_0_hat['kernel']
+            kernel_0_hat /= kernel_0_hat.max()
+            x_0_hat.update({'kernel': kernel_0_hat})
+            
+            # plt.imshow(x_0_hat['kernel'].squeeze().detach().cpu().numpy())
+            # plt.colorbar()
+            # plt.show()
+            
             if(idx > 0):
                 time = torch.tensor([idx-1] * batch_size, device=device)
                 
                 for k in model:
                     x_prev.update({k: self.q_sample(x_0_hat[k], t=time)}) 
-                
+            
+            # plt.imshow(x_prev['kernel'].squeeze().detach().cpu().numpy())
+            # plt.colorbar()
+            # plt.show()
+            
+            # Projection
+            # kernel_0_hat = x_0_hat['kernel']
+            # kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
+            # kernel_0_hat /= kernel_0_hat.sum()
+            # x_0_hat.update({'kernel': kernel_0_hat})
+            
+            # plt.imshow(x_prev['kernel'].squeeze().detach().cpu().numpy())
+            # plt.colorbar()
+            # plt.show()
+
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
+            
+            norm_array.append(norm.item())  # Append the norm value to the array
 
             if record:
                 if idx % 1 == 0:
@@ -527,6 +552,19 @@ class BlindDPS(DDPM):
                         file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
                         plt.imsave(file_path, clear_color(v))
 
+        # Plot the norm values
+        
+        plt.plot(range(self.num_timesteps), norm_array)
+        plt.xlabel('Iteration Index')
+        plt.ylabel('Norm')
+        plt.ylim(bottom=0, top=max(norm_array))  # Set the Y-axis range
+        
+        save_dir = os.path.join(save_root, f'progress_norm/')
+        if not os.path.isdir(save_dir):
+            os.makedirs(save_dir, exist_ok=True)
+        plt.savefig(os.path.join(save_dir, 'norm_plot.png'))
+        plt.close()
+
         return x_0_hat
     
 # =================
@@ -534,6 +572,7 @@ class BlindDPS(DDPM):
 # =================
 
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
+    
     """
     Get a pre-defined beta schedule for the given name.
 
@@ -558,9 +597,11 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # diffusion steps.
         scale = 1000 / num_diffusion_timesteps
 
-        beta_start = scale * 0.000001
-        beta_end = scale * 0.0002
-
+        # beta_start = scale * 0.000001
+        # beta_end = scale * 0.0002
+        beta_start = 0.000001
+        beta_end = 0.0002
+        
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )

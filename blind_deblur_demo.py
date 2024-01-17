@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/L2')
+    parser.add_argument('--save_dir', type=str, default='./results/debug/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -172,7 +172,7 @@ def main():
         plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
         plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
+
         break
-    
 if __name__ == '__main__':
     main()

@@ -3,6 +3,7 @@ import torch
 
 from guided_diffusion.measurements import BlindBlurOperator, TurbulenceOperator
 from guided_diffusion.condition_methods import ConditioningMethod, register_conditioning_method
+import matplotlib.pyplot as plt
 
 __CONDITIONING_METHOD__ = {}
 
@@ -49,9 +50,15 @@ class BlindConditioningMethod(ConditioningMethod):
             
             with torch.autograd.set_detect_anomaly(True):
                 x_prev_values = [x[1] for x in sorted(x_prev.items())] 
+
                 x_0_hat_prev_values = [x[1] for x in sorted(x_0_hat_prev.items())]
-                
+
                 difference = measurement - self.operator.forward(*x_0_hat_prev_values)
+                
+                # plt.imshow(self.operator.forward(*x_0_hat_prev_values).detach().cpu().numpy()[0,:,:])
+                # plt.colorbar()
+                # plt.show()
+                
                 norm = torch.linalg.norm(difference)
 
                 ## Begin lines 12 of Algorithm 1
