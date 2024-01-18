@@ -3,6 +3,8 @@ import torch
 
 from guided_diffusion.measurements import BlindBlurOperator, TurbulenceOperator
 from guided_diffusion.condition_methods import ConditioningMethod, register_conditioning_method
+import os
+import os
 import matplotlib.pyplot as plt
 
 __CONDITIONING_METHOD__ = {}
@@ -52,12 +54,19 @@ class BlindConditioningMethod(ConditioningMethod):
                 x_prev_values = [x[1] for x in sorted(x_prev.items())] 
 
                 x_0_hat_prev_values = [x[1] for x in sorted(x_0_hat_prev.items())]
-
+                x_0_hat_values = [x[1] for x in sorted(x_0_hat.items())]
+                # difference = measurement - self.operator.forward(*x_0_hat_prev_values)
                 difference = measurement - self.operator.forward(*x_0_hat_prev_values)
                 
-                # plt.imshow(self.operator.forward(*x_0_hat_prev_values).detach().cpu().numpy()[0,:,:])
-                # plt.colorbar()
-                # plt.show()
+                save_dir = './results/debug/blind_blur/progress_y/'
+                import matplotlib.pyplot as plt
+                os.makedirs(save_dir, exist_ok=True)
+
+                image = self.operator.forward(*x_0_hat_prev_values).detach().cpu().numpy()[0, :, :]
+                plt.imshow(image)
+                plt.colorbar()
+                plt.savefig(os.path.join(save_dir, 'y.png'))
+                plt.close()
                 
                 norm = torch.linalg.norm(difference)
 
@@ -75,8 +84,8 @@ class BlindConditioningMethod(ConditioningMethod):
 
                 ## End lines 12 of Algorithm 1
                 
-                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
-                # norm_grad = torch.autograd.grad(outputs=norm, inputs=x_0_hat_prev_values)
+                # norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
+                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_0_hat_prev_values)
                 
         else:
             raise NotImplementedError
