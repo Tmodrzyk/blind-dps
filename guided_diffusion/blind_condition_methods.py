@@ -55,14 +55,13 @@ class BlindConditioningMethod(ConditioningMethod):
 
                 x_0_hat_prev_values = [x[1] for x in sorted(x_0_hat_prev.items())]
                 x_0_hat_values = [x[1] for x in sorted(x_0_hat.items())]
-                # difference = measurement - self.operator.forward(*x_0_hat_prev_values)
-                difference = measurement - self.operator.forward(*x_0_hat_prev_values)
+                difference = measurement - self.operator.forward(*x_0_hat_values)
                 
                 save_dir = './results/debug/blind_blur/progress_y/'
                 import matplotlib.pyplot as plt
                 os.makedirs(save_dir, exist_ok=True)
 
-                image = self.operator.forward(*x_0_hat_prev_values).detach().cpu().numpy()[0, :, :]
+                image = self.operator.forward(*x_0_hat_values).detach().cpu().numpy()[0, :, :]
                 plt.imshow(image)
                 plt.colorbar()
                 plt.savefig(os.path.join(save_dir, 'y.png'))
@@ -83,8 +82,6 @@ class BlindConditioningMethod(ConditioningMethod):
                             norm = norm + reg_scale * torch.linalg.norm(x_0_hat[reg_target].view(-1), ord=reg_ord)                        
 
                 ## End lines 12 of Algorithm 1
-                
-                # norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev_values)
                 norm_grad = torch.autograd.grad(outputs=norm, inputs=x_0_hat_prev_values)
                 
         else:

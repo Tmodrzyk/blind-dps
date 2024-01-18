@@ -434,42 +434,42 @@ class BlindDPS(DDPM):
         
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
-            x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
             
+            x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
+   
             # Noise the inputs
-            if(idx == self.num_timesteps-1):
-                for k in model:
-                    x_prev.update({k: self.q_sample(x_start[k], t=time)})
-                    
+            if(idx == self.num_timesteps - 1):
+               for k in model:
+                    x_prev.update({k: self.q_sample(x_prev[k], t=time)})
+
             # diffusion prior cases 
             output = dict() 
-            
             for k in model:
                 output.update({k: self.p_sample(x=x_prev[k], t=time, model=model[k])})  
             
-            if(idx == self.num_timesteps - 1):
-                x_0_hat = dict((k, v['pred_xstart']) for k, v in output.items())
-            
+            for k in model:
+                x_prev.update({k: output[k]['sample']})
+                
             # give condition
             noisy_measurement = self.q_sample(measurement, t=time)
 
-            x_0_hat_prev = dict((k, v['pred_xstart'].requires_grad_()) for k, v in output.items())
+            x_0_hat = dict((k, v['pred_xstart']) for k, v in output.items())
             
             # Projection
-            kernel_0_hat = x_0_hat_prev['kernel']
+            kernel_0_hat = x_0_hat['kernel']
             kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
             kernel_0_hat /= kernel_0_hat.sum()
-            x_0_hat_prev.update({'kernel': kernel_0_hat})
+            x_0_hat.update({'kernel': kernel_0_hat})
             
-            # kernel_0_hat = x_0_hat['kernel']
-            # kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
-            # kernel_0_hat /= kernel_0_hat.sum()
-            # x_0_hat.update({'kernel': kernel_0_hat})
-            
+            if(idx == self.num_timesteps - 1):
+                x_0_hat_prev = x_0_hat
+                            
             # Here, we implement gradually increasing scale that shows stable performance,
             # while we reported the result with a constant scale in the paper.
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            scale = 0.5
+            scale = 10.0 * (idx / self.num_timesteps)
+            # scale = 10.0 
+            
             scale = {k: scale for k in output.keys()}
             
             updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
@@ -482,25 +482,16 @@ class BlindDPS(DDPM):
             updated = dict((k, v.detach_()) for k, v in updated.items())
 
             x_0_hat = updated
-          
-            # x_0_hat['kernel'] /= x_0_hat['kernel'].max()
-            kernel_0_hat = x_0_hat['kernel']
-            kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
-            kernel_0_hat /= kernel_0_hat.sum()
-            x_0_hat.update({'kernel': kernel_0_hat})
+            x_0_hat['kernel'] /= x_0_hat['kernel'].max()
             
-                        
+            x_0_hat_prev = x_0_hat 
+            x_0_hat_prev = {k: v.requires_grad_() for k, v in x_0_hat_prev.items()}
+            
             if(idx > 0):
                 time = torch.tensor([idx-1] * batch_size, device=device)
-                
-                ## CHANGE THIS LINE TO TAKE INTO ACCOUNT THE PREVIOUS X_T
                 for k in model:
-                    x_prev.update({k: self.q_posterior_mean_variance(x_0_hat[k], x_prev[k], t=time)[0]}) 
-            
-            # plt.imshow(x_prev['kernel'].detach().cpu().numpy()[0, 0, :,:])
-            # plt.colorbar()
-            # plt.show()
-        
+                    x_prev.update({k: self.q_posterior_mean_variance(x_0_hat_prev[k], x_prev[k], t=time)[0]}) 
+                    
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
             
             norm_array.append(norm.item())  # Append the norm value to the array

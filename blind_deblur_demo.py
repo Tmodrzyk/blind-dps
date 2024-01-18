@@ -124,7 +124,7 @@ def main():
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
     # set seed for reproduce
-    np.random.seed(123)
+    # np.random.seed(123)
     
     # Do Inference
     for i, ref_img in enumerate(loader):
