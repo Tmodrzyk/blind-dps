@@ -49,6 +49,7 @@ class BlindConditioningMethod(ConditioningMethod):
                 "Keys of x_prev and x_0_hat should be identical."
 
             keys = sorted(x_prev.keys())
+            idx = kwargs.get('idx', None)
             
             with torch.autograd.set_detect_anomaly(True):
                 x_prev_values = [x[1] for x in sorted(x_prev.items())] 
@@ -60,12 +61,13 @@ class BlindConditioningMethod(ConditioningMethod):
                 save_dir = './results/debug/blind_blur/progress_y/'
                 import matplotlib.pyplot as plt
                 os.makedirs(save_dir, exist_ok=True)
-
-                image = self.operator.forward(*x_0_hat_values).detach().cpu().numpy()[0, :, :]
-                plt.imshow(image)
-                plt.colorbar()
-                plt.savefig(os.path.join(save_dir, 'y_hat.png'))
-                plt.close()
+                
+                if(idx is not None):
+                    image = self.operator.forward(*x_0_hat_values).detach().cpu().numpy()[0, :, :]
+                    plt.imshow(image)
+                    plt.colorbar()
+                    plt.savefig(os.path.join(save_dir, f'y_hat_{idx}.png'))
+                    plt.close()
                 
                 norm = torch.linalg.norm(difference)
 

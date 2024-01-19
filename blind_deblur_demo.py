@@ -153,7 +153,7 @@ def main():
         dirac_kernel = torch.zeros(kernel.shape, device=device)
         center_index = (0, 0, kernel.shape[2] // 2, kernel.shape[3] // 2)
         dirac_kernel[center_index] = 1.0
-
+        
         x_start = {'img': y_n.unsqueeze(0).requires_grad_(),
                    'kernel': dirac_kernel.requires_grad_()}
         
@@ -173,6 +173,5 @@ def main():
         plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
         plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
 
-        break
 if __name__ == '__main__':
     main()

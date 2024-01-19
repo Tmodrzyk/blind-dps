@@ -435,13 +435,17 @@ class BlindDPS(DDPM):
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
             
+            if(idx == self.num_timesteps - 1):
+                x_prev = dict((k, v.detach()) for k, v in x_prev.items())
+                x_prev['kernel'] = x_prev['kernel'] / x_prev['kernel'].max()
+            
             x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
-   
+            
             # Noise the inputs
             if(idx == self.num_timesteps - 1):
                for k in model:
                     x_prev.update({k: self.q_sample(x_prev[k], t=time)})
-
+            
             # diffusion prior cases 
             output = dict() 
             for k in model:
@@ -467,24 +471,21 @@ class BlindDPS(DDPM):
             # Here, we implement gradually increasing scale that shows stable performance,
             # while we reported the result with a constant scale in the paper.
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            scale = 10.0 * (idx / self.num_timesteps)
-            # scale = 10.0 
+            # scale = 10.0 * (idx / self.num_timesteps)
+            scale = 10.0
             
             scale = {k: scale for k in output.keys()}
-            
+
             updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
                                                 measurement=measurement,
                                                 noisy_measurement=noisy_measurement,
                                                 x_prev=x_prev,
                                                 x_0_hat_prev=x_0_hat_prev,
-                                                scale=scale)
+                                                scale=scale,
+                                                idx=idx)
             
             updated = dict((k, v.detach_()) for k, v in updated.items())
 
-            plt.imshow(updated['kernel'][0, 0].cpu().numpy())
-            plt.colorbar()
-            plt.show()
-            
             x_0_hat = updated
             x_0_hat['kernel'] /= x_0_hat['kernel'].max()
             
@@ -493,7 +494,6 @@ class BlindDPS(DDPM):
             
             if(idx > 0):
                 time = torch.tensor([idx-1] * batch_size, device=device)
-                # for k in model:
                 kernel_posterior_mean, kernel_posterior_var, _ = self.q_posterior_mean_variance(x_0_hat_prev['kernel'], 
                                                                                                 x_prev['kernel'], 
                                                                                                 t=time)
@@ -507,7 +507,6 @@ class BlindDPS(DDPM):
                 x_prev.update({'kernel': kernel_posterior_mean + torch.sqrt(kernel_posterior_var) * noise_kernel})
                 x_prev.update({'img': img_posterior_mean + torch.sqrt(img_posterior_var) * noise_img})
             
-            
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
             
             norm_array.append(norm.item())  # Append the norm value to the array
@@ -516,7 +515,7 @@ class BlindDPS(DDPM):
                 if idx % 1 == 0:
                     for k, v in x_0_hat.items():
                         save_dir = os.path.join(save_root, f'progress_x_0_hat/{k}')
-                        if not os.path.isdir(save_dir):
+                        if not os.path.isdir(save_dir): 
                             os.makedirs(save_dir, exist_ok=True)
                         file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
                         plt.imsave(file_path, clear_color(v))
@@ -577,7 +576,7 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # beta_end = scale * 0.0002
         
         beta_start = 0.00001
-        beta_end = 0.002
+        beta_end = 0.0002
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
