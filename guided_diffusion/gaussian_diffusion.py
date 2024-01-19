@@ -481,6 +481,10 @@ class BlindDPS(DDPM):
             
             updated = dict((k, v.detach_()) for k, v in updated.items())
 
+            plt.imshow(updated['kernel'][0, 0].cpu().numpy())
+            plt.colorbar()
+            plt.show()
+            
             x_0_hat = updated
             x_0_hat['kernel'] /= x_0_hat['kernel'].max()
             
@@ -489,9 +493,21 @@ class BlindDPS(DDPM):
             
             if(idx > 0):
                 time = torch.tensor([idx-1] * batch_size, device=device)
-                for k in model:
-                    x_prev.update({k: self.q_posterior_mean_variance(x_0_hat_prev[k], x_prev[k], t=time)[0]}) 
-                    
+                # for k in model:
+                kernel_posterior_mean, kernel_posterior_var, _ = self.q_posterior_mean_variance(x_0_hat_prev['kernel'], 
+                                                                                                x_prev['kernel'], 
+                                                                                                t=time)
+                
+                img_posterior_mean, img_posterior_var, _ = self.q_posterior_mean_variance(x_0_hat_prev['img'], 
+                                                                                                x_prev['img'], 
+                                                                                                t=time)
+                noise_kernel = torch.randn_like(x_prev['kernel'])
+                noise_img = torch.randn_like(x_prev['img'])
+                
+                x_prev.update({'kernel': kernel_posterior_mean + torch.sqrt(kernel_posterior_var) * noise_kernel})
+                x_prev.update({'img': img_posterior_mean + torch.sqrt(img_posterior_var) * noise_img})
+            
+            
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
             
             norm_array.append(norm.item())  # Append the norm value to the array

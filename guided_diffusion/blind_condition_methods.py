@@ -64,7 +64,7 @@ class BlindConditioningMethod(ConditioningMethod):
                 image = self.operator.forward(*x_0_hat_values).detach().cpu().numpy()[0, :, :]
                 plt.imshow(image)
                 plt.colorbar()
-                plt.savefig(os.path.join(save_dir, 'y.png'))
+                plt.savefig(os.path.join(save_dir, 'y_hat.png'))
                 plt.close()
                 
                 norm = torch.linalg.norm(difference)
