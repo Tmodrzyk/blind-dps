@@ -173,5 +173,6 @@ def main():
         plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
         plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
 
+        break
 if __name__ == '__main__':
     main()

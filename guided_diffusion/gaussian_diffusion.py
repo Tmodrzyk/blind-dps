@@ -463,10 +463,16 @@ class BlindDPS(DDPM):
             kernel_0_hat = x_0_hat['kernel']
             kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
             kernel_0_hat /= kernel_0_hat.sum()
+            kernel_0_hat = kernel_0_hat - kernel_0_hat.min() 
             x_0_hat.update({'kernel': kernel_0_hat})
+            
             
             if(idx == self.num_timesteps - 1):
                 x_0_hat_prev = x_0_hat
+
+            plt.imshow(x_0_hat['kernel'][0, 0, :, :].detach().cpu().numpy())
+            plt.colorbar()
+            plt.show()
                             
             # Here, we implement gradually increasing scale that shows stable performance,
             # while we reported the result with a constant scale in the paper.
