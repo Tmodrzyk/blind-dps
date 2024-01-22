@@ -11,7 +11,7 @@ data:
 intensity: 0
 kernel: gaussian
 kernel_size: 64
-kernel_std: [[3, 0], [0, 3]]
+kernel_std: [[1, 0], [0, 1]]
 
 measurement:
   noise:

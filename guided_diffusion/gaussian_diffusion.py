@@ -4,13 +4,16 @@ from functools import partial
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from torch import nn
+import torch.nn.functional as F
 from tqdm.auto import tqdm
 
 from util.img_utils import clear_color
 from .posterior_mean_variance import get_mean_processor, get_var_processor
 import numpy as np
 import os
-
+from util.img_utils import Blurkernel, clear_color
+from guided_diffusion.measurements import BlindBlurOperator, TurbulenceOperator
 
 
 __SAMPLER__ = {}
@@ -432,6 +435,12 @@ class BlindDPS(DDPM):
         
         norm_array = []  # Array to store the norm values
         
+        conv = Blurkernel(blur_type='gaussian', kernel_size=15, std=3, device=device)
+        gaussian_kernel = conv.get_kernel().type(torch.float32)
+        gaussian_kernel = gaussian_kernel.to(device).view(1, 1, 15, 15)
+        
+        operator = BlindBlurOperator(device=device)
+        
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
             
@@ -446,6 +455,10 @@ class BlindDPS(DDPM):
                for k in model:
                     x_prev.update({k: self.q_sample(x_prev[k], t=time)})
             
+            # plt.imshow(x_prev['kernel'][0, 0, :, :].detach().cpu().numpy())
+            # plt.title('x_prev begin')
+            # plt.colorbar()
+            # plt.show()
             # diffusion prior cases 
             output = dict() 
             for k in model:
@@ -459,26 +472,26 @@ class BlindDPS(DDPM):
 
             x_0_hat = dict((k, v['pred_xstart']) for k, v in output.items())
             
+            # Apply threshold to x_0_hat
+            # smoothed_kernel = operator.apply_kernel(x_0_hat['kernel'], gaussian_kernel)
+            # x_0_hat['kernel'] = smoothed_kernel.unsqueeze(0)
+            # threshold = 0.00025
+            # x_0_hat['kernel'] = torch.where(smoothed_kernel < threshold, torch.tensor(0.0, device=device), smoothed_kernel).unsqueeze(0).requires_grad_()
+
             # Projection
             kernel_0_hat = x_0_hat['kernel']
             kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
             kernel_0_hat /= kernel_0_hat.sum()
-            kernel_0_hat = kernel_0_hat - kernel_0_hat.min() 
             x_0_hat.update({'kernel': kernel_0_hat})
-            
-            
+
             if(idx == self.num_timesteps - 1):
                 x_0_hat_prev = x_0_hat
 
-            plt.imshow(x_0_hat['kernel'][0, 0, :, :].detach().cpu().numpy())
-            plt.colorbar()
-            plt.show()
-                            
             # Here, we implement gradually increasing scale that shows stable performance,
             # while we reported the result with a constant scale in the paper.
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            # scale = 10.0 * (idx / self.num_timesteps)
-            scale = 10.0
+            scale = 1.0 * (idx / self.num_timesteps)
+            # scale = 1.0
             
             scale = {k: scale for k in output.keys()}
 
@@ -489,29 +502,37 @@ class BlindDPS(DDPM):
                                                 x_0_hat_prev=x_0_hat_prev,
                                                 scale=scale,
                                                 idx=idx)
-            
+
             updated = dict((k, v.detach_()) for k, v in updated.items())
 
             x_0_hat = updated
             x_0_hat['kernel'] /= x_0_hat['kernel'].max()
-            
+
             x_0_hat_prev = x_0_hat 
             x_0_hat_prev = {k: v.requires_grad_() for k, v in x_0_hat_prev.items()}
             
             if(idx > 0):
-                time = torch.tensor([idx-1] * batch_size, device=device)
-                kernel_posterior_mean, kernel_posterior_var, _ = self.q_posterior_mean_variance(x_0_hat_prev['kernel'], 
-                                                                                                x_prev['kernel'], 
+                time = torch.tensor([idx] * batch_size, device=device)
+                kernel_posterior_mean, kernel_posterior_var, _ = self.q_posterior_mean_variance(x_prev['kernel'],
+                                                                                                x_0_hat_prev['kernel'], 
                                                                                                 t=time)
                 
-                img_posterior_mean, img_posterior_var, _ = self.q_posterior_mean_variance(x_0_hat_prev['img'], 
-                                                                                                x_prev['img'], 
-                                                                                                t=time)
+                img_posterior_mean, img_posterior_var, _ = self.q_posterior_mean_variance(x_prev['img'],
+                                                                                          x_0_hat_prev['img'], 
+                                                                                          t=time)
                 noise_kernel = torch.randn_like(x_prev['kernel'])
                 noise_img = torch.randn_like(x_prev['img'])
                 
                 x_prev.update({'kernel': kernel_posterior_mean + torch.sqrt(kernel_posterior_var) * noise_kernel})
                 x_prev.update({'img': img_posterior_mean + torch.sqrt(img_posterior_var) * noise_img})
+                
+                # x_prev.update({'img': self.q_sample(x_0_hat_prev['img'], t=time)})
+                # x_prev.update({k: self.q_sample(x_0_hat_prev[k], t=time) for k in x_0_hat_prev.keys()})
+
+            # plt.imshow(x_prev['kernel'][0, 0, :, :].detach().cpu().numpy())
+            # plt.title('x_prev end')
+            # plt.colorbar()
+            # plt.show()
             
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
             
@@ -583,6 +604,9 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         
         beta_start = 0.00001
         beta_end = 0.0002
+        # beta_start = 0.0001
+        # beta_end = 0.002
+
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
@@ -652,3 +676,4 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
     return res.expand(broadcast_shape)
+

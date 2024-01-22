@@ -70,8 +70,7 @@ class BlindConditioningMethod(ConditioningMethod):
                     plt.close()
                 
                 norm = torch.linalg.norm(difference)
-
-                ## Begin lines 12 of Algorithm 1
+                norm_squared = norm**2
 
                 reg_info = kwargs.get('regularization', None)
                 if reg_info is not None:
@@ -83,9 +82,12 @@ class BlindConditioningMethod(ConditioningMethod):
                         if reg_scale != 0.0:  # if got scale 0, skip calculating.
                             norm = norm + reg_scale * torch.linalg.norm(x_0_hat[reg_target].view(-1), ord=reg_ord)                        
 
-                ## End lines 12 of Algorithm 1
-                norm_grad = torch.autograd.grad(outputs=norm, inputs=x_0_hat_prev_values)
+                norm_grad = torch.autograd.grad(outputs=norm_squared, inputs=x_0_hat_prev_values)
                 
+                # plt.imshow(norm_grad[1][0, 0, :, :].detach().cpu().numpy())
+                # plt.title("Gradient of norm")
+                # plt.colorbar()
+                # plt.show()
         else:
             raise NotImplementedError
         
