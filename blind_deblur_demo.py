@@ -128,6 +128,10 @@ def main():
     
     # Do Inference
     for i, ref_img in enumerate(loader):
+        
+        if(i > 1):
+            break
+        
         logger.info(f"Inference for image {i}")
         fname = str(i).zfill(5) + '.png'
         ref_img = ref_img.to(device)
@@ -155,7 +159,7 @@ def main():
         dirac_kernel[center_index] = 1.0
         
         x_start = {'img': y_n.unsqueeze(0).requires_grad_(),
-                   'kernel': dirac_kernel.requires_grad_()}
+                   'kernel': kernel.requires_grad_()}
         
         # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
         for k in x_start:
@@ -171,8 +175,11 @@ def main():
         plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
         plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
         plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
-        plt.imsave(os.path.join(out_path, 'recon', 'ker_'+fname), clear_color(sample['kernel']))
+        
+        plt.imshow((sample['img'] - ref_img).squeeze().detach().cpu().numpy())
+        plt.colorbar()
+        plt.savefig(os.path.join(out_path, 'recon', 'diff_'+fname))
+        plt.close()
 
-        break
 if __name__ == '__main__':
     main()

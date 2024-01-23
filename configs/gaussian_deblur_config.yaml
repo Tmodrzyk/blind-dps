@@ -11,11 +11,11 @@ data:
 intensity: 0
 kernel: gaussian
 kernel_size: 64
-kernel_std: [[1, 0], [0, 1]]
+kernel_std: [[9, 0], [0, 9]]
 
 measurement:
   noise:
     name: gaussian
-    sigma: 0.01
+    sigma: 0.02
   operator:
     name: blind_blur

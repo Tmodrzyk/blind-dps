@@ -7,6 +7,8 @@ import os
 import os
 import matplotlib.pyplot as plt
 
+from util.img_utils import clear_color
+
 __CONDITIONING_METHOD__ = {}
 
 def register_conditioning_method(name: str):
@@ -59,16 +61,11 @@ class BlindConditioningMethod(ConditioningMethod):
                 difference = measurement - self.operator.forward(*x_0_hat_values)
                 
                 save_dir = './results/debug/blind_blur/progress_y/'
-                import matplotlib.pyplot as plt
                 os.makedirs(save_dir, exist_ok=True)
-                
-                if(idx is not None):
-                    image = self.operator.forward(*x_0_hat_values).detach().cpu().numpy()[0, :, :]
-                    plt.imshow(image)
-                    plt.colorbar()
-                    plt.savefig(os.path.join(save_dir, f'y_hat_{idx}.png'))
-                    plt.close()
-                
+                save_dir = './results/debug/blind_blur/progress_grad/img/'
+                os.makedirs(save_dir, exist_ok=True)
+                save_dir = './results/debug/blind_blur/progress_grad/kernel/'
+                os.makedirs(save_dir, exist_ok=True)      
                 norm = torch.linalg.norm(difference)
                 norm_squared = norm**2
 
@@ -84,10 +81,22 @@ class BlindConditioningMethod(ConditioningMethod):
 
                 norm_grad = torch.autograd.grad(outputs=norm_squared, inputs=x_0_hat_prev_values)
                 
-                # plt.imshow(norm_grad[1][0, 0, :, :].detach().cpu().numpy())
-                # plt.title("Gradient of norm")
-                # plt.colorbar()
-                # plt.show()
+                if(idx is not None):
+                    save_dir = './results/debug/blind_blur/progress_y/'
+                    
+                    image = self.operator.forward(*x_0_hat_values)
+                    plt.imshow(clear_color(image))
+                    plt.colorbar()
+                    plt.savefig(os.path.join(save_dir, f'y_hat_{idx}.png'))
+                    plt.close()
+                    
+                    save_dir = './results/debug/blind_blur/progress_grad/img/'
+                    
+                    plt.imshow(norm_grad[0][0, 0, :, :].detach().cpu().numpy())
+                    plt.colorbar()
+                    plt.savefig(os.path.join(save_dir, f'grad_img_{idx}.png'))
+                    plt.close()
+                    
         else:
             raise NotImplementedError
         
@@ -107,11 +116,7 @@ class PosteriorSampling(BlindConditioningMethod):
         if scale is None:
             scale = self.scale
         
-        ## Begin lines 11-13 of Algorithm 1 
         keys = sorted(x_prev.keys())
-        for k in keys:
-            x_0_hat.update({k: x_0_hat[k] - scale[k]*norm_grad[k]})   
-                     
-        ## End lines 11-13 of Algorithm 1
+        x_0_hat['img'] = x_0_hat['img'] - scale['img']*norm_grad['img']
         
         return x_0_hat, norm

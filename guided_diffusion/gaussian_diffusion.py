@@ -441,57 +441,36 @@ class BlindDPS(DDPM):
         
         operator = BlindBlurOperator(device=device)
         
+        x_0_hat = dict()
+        x_0_hat_prev = dict()
+
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
-            
-            if(idx == self.num_timesteps - 1):
-                x_prev = dict((k, v.detach()) for k, v in x_prev.items())
-                x_prev['kernel'] = x_prev['kernel'] / x_prev['kernel'].max()
             
             x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
             
             # Noise the inputs
             if(idx == self.num_timesteps - 1):
-               for k in model:
-                    x_prev.update({k: self.q_sample(x_prev[k], t=time)})
-            
-            # plt.imshow(x_prev['kernel'][0, 0, :, :].detach().cpu().numpy())
-            # plt.title('x_prev begin')
-            # plt.colorbar()
-            # plt.show()
+                x_0_hat_prev['img'] = x_start['img']
+                x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
+                
             # diffusion prior cases 
             output = dict() 
-            for k in model:
-                output.update({k: self.p_sample(x=x_prev[k], t=time, model=model[k])})  
+            output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
+            x_prev['img'] = output['img']['sample']
             
-            for k in model:
-                x_prev.update({k: output[k]['sample']})
-                
             # give condition
             noisy_measurement = self.q_sample(measurement, t=time)
 
-            x_0_hat = dict((k, v['pred_xstart']) for k, v in output.items())
+            x_0_hat['img'] = output['img']['pred_xstart']
+            x_0_hat['kernel'] = x_start['kernel']
             
-            # Apply threshold to x_0_hat
-            # smoothed_kernel = operator.apply_kernel(x_0_hat['kernel'], gaussian_kernel)
-            # x_0_hat['kernel'] = smoothed_kernel.unsqueeze(0)
-            # threshold = 0.00025
-            # x_0_hat['kernel'] = torch.where(smoothed_kernel < threshold, torch.tensor(0.0, device=device), smoothed_kernel).unsqueeze(0).requires_grad_()
-
-            # Projection
-            kernel_0_hat = x_0_hat['kernel']
-            kernel_0_hat = (kernel_0_hat + 1.0) / 2.0
-            kernel_0_hat /= kernel_0_hat.sum()
-            x_0_hat.update({'kernel': kernel_0_hat})
-
             if(idx == self.num_timesteps - 1):
                 x_0_hat_prev = x_0_hat
 
-            # Here, we implement gradually increasing scale that shows stable performance,
-            # while we reported the result with a constant scale in the paper.
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            scale = 1.0 * (idx / self.num_timesteps)
-            # scale = 1.0
+            # scale = 1.0 * (idx / self.num_timesteps)
+            scale = 1.0
             
             scale = {k: scale for k in output.keys()}
 
@@ -502,57 +481,40 @@ class BlindDPS(DDPM):
                                                 x_0_hat_prev=x_0_hat_prev,
                                                 scale=scale,
                                                 idx=idx)
-
-            updated = dict((k, v.detach_()) for k, v in updated.items())
-
-            x_0_hat = updated
-            x_0_hat['kernel'] /= x_0_hat['kernel'].max()
+            
+            updated['img'] = updated['img'].detach_()
+            x_0_hat['img'] = updated['img']
 
             x_0_hat_prev = x_0_hat 
             x_0_hat_prev = {k: v.requires_grad_() for k, v in x_0_hat_prev.items()}
             
             if(idx > 0):
-                time = torch.tensor([idx] * batch_size, device=device)
-                kernel_posterior_mean, kernel_posterior_var, _ = self.q_posterior_mean_variance(x_prev['kernel'],
-                                                                                                x_0_hat_prev['kernel'], 
-                                                                                                t=time)
+                time = torch.tensor([idx-1] * batch_size, device=device)
+                x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
                 
-                img_posterior_mean, img_posterior_var, _ = self.q_posterior_mean_variance(x_prev['img'],
-                                                                                          x_0_hat_prev['img'], 
-                                                                                          t=time)
-                noise_kernel = torch.randn_like(x_prev['kernel'])
-                noise_img = torch.randn_like(x_prev['img'])
-                
-                x_prev.update({'kernel': kernel_posterior_mean + torch.sqrt(kernel_posterior_var) * noise_kernel})
-                x_prev.update({'img': img_posterior_mean + torch.sqrt(img_posterior_var) * noise_img})
-                
-                # x_prev.update({'img': self.q_sample(x_0_hat_prev['img'], t=time)})
-                # x_prev.update({k: self.q_sample(x_0_hat_prev[k], t=time) for k in x_0_hat_prev.keys()})
-
-            # plt.imshow(x_prev['kernel'][0, 0, :, :].detach().cpu().numpy())
-            # plt.title('x_prev end')
-            # plt.colorbar()
-            # plt.show()
-            
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
             
             norm_array.append(norm.item())  # Append the norm value to the array
 
             if record:
                 if idx % 1 == 0:
-                    for k, v in x_0_hat.items():
-                        save_dir = os.path.join(save_root, f'progress_x_0_hat/{k}')
-                        if not os.path.isdir(save_dir): 
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(v))
+                    save_dir = os.path.join(save_root, 'progress_x_0_hat/img/')
+                    if not os.path.isdir(save_dir): 
+                        os.makedirs(save_dir, exist_ok=True)
+                    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                    plt.imshow(clear_color(x_0_hat['img']))
+                    plt.colorbar()
+                    plt.savefig(file_path)
+                    plt.close()
                         
-                    for k, v in x_prev.items():
-                        save_dir = os.path.join(save_root, f'progress_x_t/{k}')
-                        if not os.path.isdir(save_dir):
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(v))
+                    save_dir = os.path.join(save_root, 'progress_x_t/img/')
+                    if not os.path.isdir(save_dir):
+                        os.makedirs(save_dir, exist_ok=True)
+                    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                    plt.imshow(clear_color(x_prev['img']))
+                    plt.colorbar()
+                    plt.savefig(file_path)
+                    plt.close()
 
         # Plot the norm values
         
@@ -603,7 +565,7 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # beta_end = scale * 0.0002
         
         beta_start = 0.00001
-        beta_end = 0.0002
+        beta_end = 0.002
         # beta_start = 0.0001
         # beta_end = 0.002
 
