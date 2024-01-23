@@ -97,3 +97,43 @@ class PosteriorSampling(BlindConditioningMethod):
         x_0_hat['img'] = x_0_hat['img'] - scale['img']*norm_grad['img']
         
         return x_0_hat, norm
+    
+@register_conditioning_method(name='mlem')
+class MLEM(BlindConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        assert kwargs.get('scale') is not None
+        self.scale = kwargs.get('scale')
+
+    def mlem(self, x_0_hat, measurement, steps, **kwargs):
+        img = x_0_hat['img']
+        kernel = x_0_hat['kernel']
+        
+        # plt.imshow(img.squeeze().detach().cpu().numpy())
+        # plt.title(f'x_0_hat')
+        # plt.colorbar()
+        # plt.show()
+        
+        for step in range(steps):
+            # Forward projection: Calculate the expected measurement
+            reconstruction = self.operator.forward(data=img, kernel=kernel).unsqueeze(0)
+            ratio = self.operator.forward(data=(measurement / reconstruction.clamp(1e-2)), kernel=kernel)
+            
+            # ratio = ratio.clip(-1, 1)
+            
+            x_0_hat['img'] *= ratio
+
+            norm = torch.linalg.norm(measurement - reconstruction)
+        
+        # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
+        # plt.title(f'MLEM output')
+        # plt.colorbar()
+        # plt.show()
+            
+        return x_0_hat, norm
+    
+    def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
+        steps = 10
+        x_0_hat, norm = self.mlem(x_0_hat, measurement, steps, **kwargs)
+
+        return x_0_hat, norm

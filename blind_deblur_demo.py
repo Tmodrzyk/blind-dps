@@ -129,7 +129,7 @@ def main():
     # Do Inference
     for i, ref_img in enumerate(loader):
         
-        if(i > 1):
+        if(i > 0):
             break
         
         logger.info(f"Inference for image {i}")
