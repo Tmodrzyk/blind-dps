@@ -441,33 +441,26 @@ class BlindDPS(DDPM):
         
         operator = BlindBlurOperator(device=device)
         
+        time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
+        
         x_0_hat = dict()
         x_0_hat_prev = dict()
+        x_0_hat_prev['img'] = x_start['img']
+        x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
 
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
             
             x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
             
-            # Noise the inputs
-            if(idx == self.num_timesteps - 1):
-                x_0_hat_prev['img'] = x_start['img']
-                x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
-                
             # diffusion prior cases 
             output = dict() 
             output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
             x_prev['img'] = output['img']['sample']
-            
-            # give condition
-            noisy_measurement = self.q_sample(measurement, t=time)
 
             x_0_hat['img'] = output['img']['pred_xstart']
             x_0_hat['kernel'] = x_start['kernel']
             
-            if(idx == self.num_timesteps - 1):
-                x_0_hat_prev = x_0_hat
-
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
             # scale = 1.0 * (idx / self.num_timesteps)
             scale = 1.0
@@ -476,8 +469,6 @@ class BlindDPS(DDPM):
 
             updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
                                                 measurement=measurement,
-                                                noisy_measurement=noisy_measurement,
-                                                x_prev=x_prev,
                                                 x_0_hat_prev=x_0_hat_prev,
                                                 scale=scale,
                                                 idx=idx)
