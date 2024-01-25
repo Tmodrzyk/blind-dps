@@ -422,7 +422,8 @@ class BlindDPS(DDPM):
                       measurement,
                       measurement_cond_fn,
                       record,
-                      save_root):
+                      save_root, 
+                      gt):
        
         assert isinstance(model, dict) and isinstance(x_start, dict)
         
@@ -441,15 +442,16 @@ class BlindDPS(DDPM):
         
         operator = BlindBlurOperator(device=device)
         
-        time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
-        
         x_0_hat = dict()
         x_0_hat_prev = dict()
         x_0_hat_prev['img'] = x_start['img']
-        x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
 
         for idx in pbar:
-            time = torch.tensor([idx] * batch_size, device=device)
+            # time = torch.tensor([idx] * batch_size, device=device)
+            # time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
+            time = torch.randint(low=(self.num_timesteps-1)//2, high=self.num_timesteps-1, size=(batch_size,), device=device)
+            
+            x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
             
             x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
             
@@ -463,7 +465,7 @@ class BlindDPS(DDPM):
             
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
             # scale = 1.0 * (idx / self.num_timesteps)
-            scale = 1.0
+            scale = 0.75
             
             scale = {k: scale for k in output.keys()}
 
@@ -477,12 +479,11 @@ class BlindDPS(DDPM):
             x_0_hat['img'] = updated['img']
 
             x_0_hat_prev = x_0_hat 
+            diff = gt - x_0_hat['img']
+            norm = torch.linalg.norm(diff)
+            
             x_0_hat_prev = {k: v.requires_grad_() for k, v in x_0_hat_prev.items()}
             
-            if(idx > 0):
-                time = torch.tensor([idx-1] * batch_size, device=device)
-                x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
-                
             pbar.set_postfix({'norm': norm.item()}, refresh=False)
             
             norm_array.append(norm.item())  # Append the norm value to the array

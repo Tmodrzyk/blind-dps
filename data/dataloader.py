@@ -33,7 +33,6 @@ def get_dataloader(dataset: VisionDataset,
                             drop_last=train)
     return dataloader
 
-
 @register_dataset(name='ffhq')
 class FFHQDataset(VisionDataset):
     def __init__(self, root: str, transforms: Optional[Callable]=None):
@@ -47,7 +46,7 @@ class FFHQDataset(VisionDataset):
 
     def __getitem__(self, index: int):
         fpath = self.fpaths[index]
-        img = Image.open(fpath).convert('L')
+        img = Image.open(fpath).convert('RGB')
         
         if self.transforms is not None:
             img = self.transforms(img)
@@ -84,4 +83,24 @@ class AFHQDataset(VisionDataset):
         
         if self.transforms is not None:
             img = self.transforms(img)
+        return img
+    
+@register_dataset(name='ellipse')
+class FFHQDataset(VisionDataset):
+    def __init__(self, root: str, transforms: Optional[Callable]=None):
+        super().__init__(root, transforms)
+
+        self.fpaths = sorted(glob(root + '/**/*.png', recursive=True))
+        assert len(self.fpaths) > 0, "File list is empty. Check the root."
+
+    def __len__(self):
+        return len(self.fpaths)
+
+    def __getitem__(self, index: int):
+        fpath = self.fpaths[index]
+        img = Image.open(fpath).convert('L')
+        
+        if self.transforms is not None:
+            img = self.transforms(img)
+        
         return img

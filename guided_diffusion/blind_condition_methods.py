@@ -54,26 +54,26 @@ class BlindConditioningMethod(ConditioningMethod):
                 x_0_hat_values = [x[1] for x in sorted(x_0_hat.items())]
                 difference = measurement - self.operator.forward(*x_0_hat_values)
                 norm = torch.linalg.norm(difference)
-                norm_squared = norm**2
+                norm_squared = norm
                 norm_grad = torch.autograd.grad(outputs=norm_squared, inputs=x_0_hat_prev_values)
                 
-                if(idx is not None):
-                    save_dir = './results/debug/blind_blur/progress_grad/img/'
-                    os.makedirs(save_dir, exist_ok=True)
+                # if(idx is not None):
+                #     save_dir = './results/debug/blind_blur/progress_grad/img/'
+                #     os.makedirs(save_dir, exist_ok=True)
                     
-                    image = self.operator.forward(*x_0_hat_values)
-                    plt.imshow(clear_color(image))
-                    plt.colorbar()
-                    plt.savefig(os.path.join(save_dir, f'y_hat_{idx}.png'))
-                    plt.close()
+                #     image = self.operator.forward(*x_0_hat_values)
+                #     plt.imshow(clear_color(image))
+                #     plt.colorbar()
+                #     plt.savefig(os.path.join(save_dir, f'y_hat_{idx}.png'))
+                #     plt.close()
                     
-                    save_dir = './results/debug/blind_blur/progress_grad/kernel/'
-                    os.makedirs(save_dir, exist_ok=True)
+                #     save_dir = './results/debug/blind_blur/progress_grad/kernel/'
+                #     os.makedirs(save_dir, exist_ok=True)
                     
-                    plt.imshow(norm_grad[0][0, 0, :, :].detach().cpu().numpy())
-                    plt.colorbar()
-                    plt.savefig(os.path.join(save_dir, f'grad_img_{idx}.png'))
-                    plt.close()
+                #     plt.imshow(norm_grad[0][0, 0, :, :].detach().cpu().numpy())
+                #     plt.colorbar()
+                #     plt.savefig(os.path.join(save_dir, f'grad_img_{idx}.png'))
+                #     plt.close()
                     
         else:
             raise NotImplementedError
@@ -88,13 +88,18 @@ class PosteriorSampling(BlindConditioningMethod):
         self.scale = kwargs.get('scale')
 
     def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
-        norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
+        # norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
 
         scale = kwargs.get('scale')
         if scale is None:
             scale = self.scale
         
-        x_0_hat['img'] = x_0_hat['img'] - scale['img']*norm_grad['img']
+        steps = 4
+        
+        for step in range(steps):
+            norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
+            x_0_hat_prev = x_0_hat
+            x_0_hat['img'] = x_0_hat['img'] - scale['img']*norm_grad['img']
         
         return x_0_hat, norm
     
@@ -113,6 +118,7 @@ class MLEM(BlindConditioningMethod):
         # plt.title(f'x_0_hat')
         # plt.colorbar()
         # plt.show()
+        steps = 4
         
         for step in range(steps):
             # Forward projection: Calculate the expected measurement
