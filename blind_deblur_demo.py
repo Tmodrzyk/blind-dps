@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/debug/mlem/')
+    parser.add_argument('--save_dir', type=str, default='./results/debug/mlem_4/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -69,6 +69,7 @@ def main():
     
     # Load model
     img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
+    # img_model = guided_diffusion.unet.create_model(**img_model_config)
     img_model = img_model.to(device)
     img_model.eval()
     
@@ -114,7 +115,6 @@ def main():
     data_config = task_config['data']
     transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Grayscale(num_output_channels=1),
-                                    
                                     # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                                     # Careful with the normalization, it caused the reconstruction to fail
                                     # transforms.Normalize(0.5, 0.5)
@@ -129,9 +129,6 @@ def main():
     # Do Inference
     for i, ref_img in enumerate(loader):
         
-        if(i > 0):
-            break
-        
         logger.info(f"Inference for image {i}")
         fname = str(i).zfill(5) + '.png'
         ref_img = ref_img.to(device)
@@ -141,7 +138,9 @@ def main():
             kernel = torch.from_numpy(kernel).type(torch.float32)
             kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
         elif args.kernel == 'gaussian':
+            # conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.kernel_std, device=device)
             conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.kernel_std, device=device)
+            
             kernel = conv.get_kernel().type(torch.float32)
             kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
         
@@ -181,5 +180,7 @@ def main():
         plt.savefig(os.path.join(out_path, 'recon', 'diff_'+fname))
         plt.close()
 
+        break
+    
 if __name__ == '__main__':
     main()

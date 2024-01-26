@@ -1,5 +1,5 @@
 conditioning:
-  method: mlem
+  method: wiener
   params:
     scale: 0.3
     # scale: 0.3
@@ -11,7 +11,9 @@ data:
 intensity: 0
 kernel: gaussian
 kernel_size: 64
-kernel_std: [[9, 0], [0, 9]]
+# kernel_std: [[9, 0], [0, 9]]
+kernel_std: 3.0
+
 
 measurement:
   noise:

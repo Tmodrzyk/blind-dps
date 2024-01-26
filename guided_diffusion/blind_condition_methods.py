@@ -6,6 +6,7 @@ from guided_diffusion.condition_methods import ConditioningMethod, register_cond
 import os
 import os
 import matplotlib.pyplot as plt
+from skimage.restoration import richardson_lucy, wiener, unsupervised_wiener
 
 from util.img_utils import clear_color
 
@@ -94,7 +95,7 @@ class PosteriorSampling(BlindConditioningMethod):
         if scale is None:
             scale = self.scale
         
-        steps = 4
+        steps = 16
         
         for step in range(steps):
             norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
@@ -110,36 +111,64 @@ class MLEM(BlindConditioningMethod):
         assert kwargs.get('scale') is not None
         self.scale = kwargs.get('scale')
 
-    def mlem(self, x_0_hat, measurement, steps, **kwargs):
+    def mlem(self, x_0_hat, steps, **kwargs):
         img = x_0_hat['img']
         kernel = x_0_hat['kernel']
         
-        # plt.imshow(img.squeeze().detach().cpu().numpy())
-        # plt.title(f'x_0_hat')
-        # plt.colorbar()
-        # plt.show()
-        steps = 4
+        img = self.operator.forward(img, kernel).unsqueeze(0)
+        deconv_img = richardson_lucy(img.cpu().detach().numpy(), kernel.cpu().detach().numpy(), num_iter=steps, clip=False, filter_epsilon=1e-3)
         
-        for step in range(steps):
-            # Forward projection: Calculate the expected measurement
-            reconstruction = self.operator.forward(data=img, kernel=kernel).unsqueeze(0)
-            ratio = self.operator.forward(data=(measurement / reconstruction.clamp(1e-2)), kernel=kernel)
-            
-            # ratio = ratio.clip(-1, 1)
-            
-            x_0_hat['img'] *= ratio
-
-            norm = torch.linalg.norm(measurement - reconstruction)
+        x_0_hat['img'] = torch.from_numpy(deconv_img).to('cuda')
         
-        # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
-        # plt.title(f'MLEM output')
-        # plt.colorbar()
-        # plt.show()
-            
-        return x_0_hat, norm
+        return x_0_hat, 0
     
     def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
         steps = 10
-        x_0_hat, norm = self.mlem(x_0_hat, measurement, steps, **kwargs)
+        plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
+        plt.colorbar()
+        plt.title('Before MLEM')
+        plt.show()
+        
+        x_0_hat, norm = self.mlem(x_0_hat=x_0_hat, steps=steps, **kwargs)
 
+        plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
+        plt.colorbar()
+        plt.title('After MLEM')
+        plt.show()
+        
+        return x_0_hat, norm
+    
+@register_conditioning_method(name='wiener')
+class MLEM(BlindConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        assert kwargs.get('scale') is not None
+        self.scale = kwargs.get('scale')
+
+    
+    def wiener_deconv(self, x_0_hat, **kwargs):
+        img = x_0_hat['img']
+        kernel = x_0_hat['kernel']
+        img = self.operator.forward(img, kernel)
+
+        deconv_img = wiener(image=img.squeeze().cpu().detach().numpy(), balance=1.0, psf=kernel.squeeze().cpu().detach().numpy(), clip=False)
+        # deconv_img, _ = unsupervised_wiener(image=img.numpy(), psf=kernel.numpy(), clip=False)
+        
+        x_0_hat['img'] = torch.from_numpy(deconv_img).to('cuda').unsqueeze(0).unsqueeze(0)
+        
+        return x_0_hat, 0
+    
+    def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
+        plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
+        plt.colorbar()
+        plt.title('Before Wiener')
+        plt.show()
+        
+        x_0_hat, norm = self.wiener_deconv(x_0_hat=x_0_hat, **kwargs)
+
+        plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
+        plt.colorbar()
+        plt.title('After Wiener')
+        plt.show()
+        
         return x_0_hat, norm

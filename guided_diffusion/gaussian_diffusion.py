@@ -447,9 +447,9 @@ class BlindDPS(DDPM):
         x_0_hat_prev['img'] = x_start['img']
 
         for idx in pbar:
-            # time = torch.tensor([idx] * batch_size, device=device)
+            time = torch.tensor([idx] * batch_size, device=device)
             # time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
-            time = torch.randint(low=(self.num_timesteps-1)//2, high=self.num_timesteps-1, size=(batch_size,), device=device)
+            # time = torch.randint(low=(self.num_timesteps-1)//2, high=self.num_timesteps-1, size=(batch_size,), device=device)
             
             x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
             
@@ -475,7 +475,7 @@ class BlindDPS(DDPM):
                                                 scale=scale,
                                                 idx=idx)
             
-            updated['img'] = updated['img'].detach_()
+            updated['img'] = updated['img'].detach()
             x_0_hat['img'] = updated['img']
 
             x_0_hat_prev = x_0_hat 

@@ -86,7 +86,7 @@ class AFHQDataset(VisionDataset):
         return img
     
 @register_dataset(name='ellipse')
-class FFHQDataset(VisionDataset):
+class EllipseDataset(VisionDataset):
     def __init__(self, root: str, transforms: Optional[Callable]=None):
         super().__init__(root, transforms)
 
