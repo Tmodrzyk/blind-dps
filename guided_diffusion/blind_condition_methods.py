@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from skimage.restoration import richardson_lucy, wiener, unsupervised_wiener
 
 from util.img_utils import clear_color
+from scipy.signal import convolve
+import numpy as np
 
 __CONDITIONING_METHOD__ = {}
 
@@ -91,16 +93,18 @@ class PosteriorSampling(BlindConditioningMethod):
     def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
         # norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
 
-        scale = kwargs.get('scale')
-        if scale is None:
-            scale = self.scale
+        g_scale = kwargs.get('scale')
+        if g_scale is None:
+            g_scale = self.scale
         
-        steps = 16
+        steps = 30
         
         for step in range(steps):
+            # scale = g_scale['img'] *(steps - step) / steps
+            scale = g_scale['img']
             norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
             x_0_hat_prev = x_0_hat
-            x_0_hat['img'] = x_0_hat['img'] - scale['img']*norm_grad['img']
+            x_0_hat['img'] = x_0_hat['img'] - scale*norm_grad['img']
         
         return x_0_hat, norm
     
@@ -110,36 +114,55 @@ class MLEM(BlindConditioningMethod):
         super().__init__(operator, noiser)
         assert kwargs.get('scale') is not None
         self.scale = kwargs.get('scale')
+        np.random.seed(123)
 
-    def mlem(self, x_0_hat, steps, **kwargs):
+    def mlem(self, observation, x_0_hat, steps, clip, filter_epsilon, **kwargs):
         img = x_0_hat['img']
         kernel = x_0_hat['kernel']
         
-        img = self.operator.forward(img, kernel).unsqueeze(0)
-        deconv_img = richardson_lucy(img.cpu().detach().numpy(), kernel.cpu().detach().numpy(), num_iter=steps, clip=False, filter_epsilon=1e-3)
-        
-        x_0_hat['img'] = torch.from_numpy(deconv_img).to('cuda')
-        
+        image = observation.detach().cpu().numpy().astype(np.float32, copy=True)
+        psf = kernel.detach().cpu().numpy().astype(np.float32, copy=False)
+        # im_deconv = np.full(image.shape, 0.5, dtype=np.float32)
+        im_deconv = img.detach().cpu().numpy().astype(np.float32, copy=True)
+        psf_mirror = np.flip(psf)
+
+        # Small regularization parameter used to avoid 0 divisions
+        eps = 1e-12
+
+        for _ in range(steps):
+            conv = convolve(im_deconv, psf, mode='same') + eps
+            if filter_epsilon:
+                relative_blur = np.where(conv < filter_epsilon, 0, image / conv)
+            else:
+                relative_blur = image / conv
+            im_deconv *= convolve(relative_blur, psf_mirror, mode='same')
+
+        if clip:
+            im_deconv[im_deconv > 1] = 1
+            im_deconv[im_deconv < -1] = -1
+
+        x_0_hat['img'] = torch.from_numpy(im_deconv).to('cuda')
+    
         return x_0_hat, 0
+
     
     def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
-        steps = 10
-        plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
-        plt.colorbar()
-        plt.title('Before MLEM')
-        plt.show()
+        steps = 20
+        # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('Before MLEM')
+        # plt.show()
         
-        x_0_hat, norm = self.mlem(x_0_hat=x_0_hat, steps=steps, **kwargs)
-
-        plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
-        plt.colorbar()
-        plt.title('After MLEM')
-        plt.show()
+        x_0_hat, norm = self.mlem(observation=measurement, x_0_hat=x_0_hat, steps=steps, clip=False, filter_epsilon=1e-3, **kwargs)
+        # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
+        # plt.colorbar()
+        # plt.title('After MLEM')
+        # plt.show()
         
         return x_0_hat, norm
     
 @register_conditioning_method(name='wiener')
-class MLEM(BlindConditioningMethod):
+class Wiener(BlindConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
         assert kwargs.get('scale') is not None

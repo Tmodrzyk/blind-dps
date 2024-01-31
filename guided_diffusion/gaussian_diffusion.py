@@ -447,9 +447,9 @@ class BlindDPS(DDPM):
         x_0_hat_prev['img'] = x_start['img']
 
         for idx in pbar:
-            time = torch.tensor([idx] * batch_size, device=device)
-            # time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
-            # time = torch.randint(low=(self.num_timesteps-1)//2, high=self.num_timesteps-1, size=(batch_size,), device=device)
+            # time = torch.tensor([idx] * batch_size, device=device)
+            time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
+            # time = torch.randint(low=1, high=self.num_timesteps-1, size=(batch_size,), device=device)
             
             x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
             
@@ -464,29 +464,18 @@ class BlindDPS(DDPM):
             x_0_hat['kernel'] = x_start['kernel']
             
             # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            # scale = 1.0 * (idx / self.num_timesteps)
-            scale = 0.75
+            # scale = 2.0 * (idx / self.num_timesteps)
+            scale = 0.5
             
-            scale = {k: scale for k in output.keys()}
-
-            updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
-                                                measurement=measurement,
-                                                x_0_hat_prev=x_0_hat_prev,
-                                                scale=scale,
-                                                idx=idx)
-            
-            updated['img'] = updated['img'].detach()
-            x_0_hat['img'] = updated['img']
-
             x_0_hat_prev = x_0_hat 
             diff = gt - x_0_hat['img']
-            norm = torch.linalg.norm(diff)
-            
-            x_0_hat_prev = {k: v.requires_grad_() for k, v in x_0_hat_prev.items()}
-            
-            pbar.set_postfix({'norm': norm.item()}, refresh=False)
-            
+            norm = torch.abs(diff).mean()
             norm_array.append(norm.item())  # Append the norm value to the array
+            pbar.set_postfix({'norm': norm.item()}, refresh=True)
+            
+            if(idx == 0):
+                return x_0_hat, norm_array
+            scale = {k: scale for k in output.keys()}
 
             if record:
                 if idx % 1 == 0:
@@ -494,7 +483,7 @@ class BlindDPS(DDPM):
                     if not os.path.isdir(save_dir): 
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imshow(clear_color(x_0_hat['img']))
+                    plt.imshow(x_0_hat['img'].squeeze().cpu().detach().numpy())
                     plt.colorbar()
                     plt.savefig(file_path)
                     plt.close()
@@ -507,21 +496,29 @@ class BlindDPS(DDPM):
                     plt.colorbar()
                     plt.savefig(file_path)
                     plt.close()
+                    
+                    save_dir = os.path.join(save_root, 'progress_diff/img/')
+                    if not os.path.isdir(save_dir):
+                        os.makedirs(save_dir, exist_ok=True)
+                    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                    plt.imshow(clear_color(diff))
+                    plt.colorbar()
+                    plt.savefig(file_path)
+                    plt.close()
+            
+            updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
+                                                measurement=measurement,
+                                                x_0_hat_prev=x_0_hat_prev,
+                                                scale=scale,
+                                                idx=idx)
+            
+            updated['img'] = updated['img'].detach()
+            x_0_hat['img'] = updated['img']
 
-        # Plot the norm values
-        
-        plt.plot(range(self.num_timesteps), norm_array)
-        plt.xlabel('Iteration Index')
-        plt.ylabel('Norm')
-        plt.ylim(bottom=0, top=max(norm_array))  # Set the Y-axis range
-        
-        save_dir = os.path.join(save_root, f'progress_norm/')
-        if not os.path.isdir(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
-        plt.savefig(os.path.join(save_dir, 'norm_plot.png'))
-        plt.close()
 
-        return x_0_hat
+            x_0_hat_prev = {k: v.requires_grad_() for k, v in x_0_hat_prev.items()}
+        
+        return x_0_hat, norm_array
     
 # =================
 # Helper functions
@@ -558,8 +555,8 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         
         beta_start = 0.00001
         beta_end = 0.002
-        # beta_start = 0.0001
-        # beta_end = 0.002
+        # beta_start = 1e-16
+        # beta_end = 1e-16
 
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
