@@ -483,7 +483,7 @@ class BlindDPS(DDPM):
                     if not os.path.isdir(save_dir): 
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imshow(x_0_hat['img'].squeeze().cpu().detach().numpy())
+                    plt.imshow(x_0_hat['img'].squeeze().cpu().detach().numpy().T)
                     plt.colorbar()
                     plt.savefig(file_path)
                     plt.close()

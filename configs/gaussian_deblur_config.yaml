@@ -5,8 +5,8 @@ conditioning:
     # scale: 0.3
 
 data:
-  name: ellipse
-  root: ./data/ellipse_samples/
+  name: ffhq
+  root: ./data/samples/
 
 intensity: 0
 kernel: gaussian
