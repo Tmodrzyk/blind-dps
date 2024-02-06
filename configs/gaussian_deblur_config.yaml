@@ -5,14 +5,14 @@ conditioning:
     # scale: 0.3
 
 data:
-  name: ffhq
-  root: ./data/samples/
+  name: ellipse
+  root: ./data/ellipse_samples/
 
 intensity: 0
-kernel: gaussian
 kernel_size: 65
-# kernel_std: [[9, 0], [0, 9]]
 kernel_std: 3.0
+kernel: gaussian
+# kernel_std: [[9, 0], [0, 9]]
 
 
 measurement:
@@ -20,4 +20,6 @@ measurement:
     name: gaussian
     sigma: 0.02
   operator:
-    name: blind_blur
+    name: gaussian_blur
+    kernel_size: 65
+    intensity: 3.0

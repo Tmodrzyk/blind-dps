@@ -166,9 +166,13 @@ class BlindBlurOperator(LinearOperator):
         #TODO: faster way to apply conv?:W
         
         b_img = torch.zeros_like(data).to(self.device)
-        for i in range(3):
-            b_img[:, i, :, :] = F.conv2d(data[:, i:i+1, :, :], kernel, padding='same')
+        pad = (kernel.shape[2]//2, kernel.shape[2]//2, kernel.shape[3]//2, kernel.shape[3]//2)
+        
+        for i in range(data.shape[1]):
+            b_img = F.pad(data, pad, mode='reflect')
+            b_img[:, i, :, :] = F.conv2d(data[:, i:i+1, :, :], kernel)
         return b_img
+    
     # def apply_kernel(self, data, kernel):
     #     #TODO: faster way to apply conv?:W
         

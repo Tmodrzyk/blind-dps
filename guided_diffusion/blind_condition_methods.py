@@ -1,7 +1,7 @@
 from typing import Dict
 import torch
 
-from guided_diffusion.measurements import BlindBlurOperator, TurbulenceOperator
+from guided_diffusion.measurements import BlindBlurOperator, TurbulenceOperator, GaussialBlurOperator
 from guided_diffusion.condition_methods import ConditioningMethod, register_conditioning_method
 import os
 import os
@@ -11,6 +11,8 @@ from skimage.restoration import richardson_lucy, wiener, unsupervised_wiener
 from util.img_utils import clear_color
 from scipy.signal import convolve
 import numpy as np
+
+import torch.nn.functional as F
 
 __CONDITIONING_METHOD__ = {}
 
@@ -34,7 +36,7 @@ class BlindConditioningMethod(ConditioningMethod):
         Handle multiple score models.
         Yet, support only gaussian noise measurement.
         '''
-        assert isinstance(operator, BlindBlurOperator) or isinstance(operator, TurbulenceOperator)
+        assert isinstance(operator, BlindBlurOperator) or isinstance(operator, TurbulenceOperator) or isinstance(operator, GaussialBlurOperator)
         self.operator = operator
         self.noiser = noiser
     
@@ -83,28 +85,55 @@ class BlindConditioningMethod(ConditioningMethod):
         
         return dict(zip(keys, norm_grad)), norm
 
-@register_conditioning_method(name='ps')
+@register_conditioning_method(name='gd')
 class PosteriorSampling(BlindConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
         assert kwargs.get('scale') is not None
         self.scale = kwargs.get('scale')
 
-    def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
-        # norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
+    def gradient_descent(self, x_0_hat, measurement, steps, **kwargs):
+        x_0_hat['img'].requires_grad_()
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.SGD([x_0_hat['img']], lr=10.0)  # Example with SGD
 
-        g_scale = kwargs.get('scale')
-        if g_scale is None:
-            g_scale = self.scale
-        
-        steps = 30
-        
         for step in range(steps):
-            # scale = g_scale['img'] *(steps - step) / steps
-            scale = g_scale['img']
-            norm_grad, norm = self.grad_and_value(x_0_hat, x_0_hat_prev, measurement, **kwargs)
-            x_0_hat_prev = x_0_hat
-            x_0_hat['img'] = x_0_hat['img'] - scale*norm_grad['img']
+            optimizer.zero_grad()
+            loss = criterion(self.operator.forward(x_0_hat['img']), measurement)
+            loss.backward()
+            optimizer.step()
+        
+        return x_0_hat, loss
+    
+    def conditioning(self, x_0_hat, measurement, steps, **kwargs):
+        x_0_hat['img'].detach_()
+        x_0_hat, norm = self.gradient_descent(x_0_hat, measurement, steps, **kwargs)
+        
+        return x_0_hat, norm
+
+@register_conditioning_method(name='adam')
+class PosteriorSampling(BlindConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        assert kwargs.get('scale') is not None
+        self.scale = kwargs.get('scale')
+
+    def gradient_descent(self, x_0_hat, measurement, steps, **kwargs):
+        x_0_hat['img'].requires_grad_()
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.Adam([x_0_hat['img']], lr=0.01)  # Example with Adam
+
+        for step in range(steps):
+            optimizer.zero_grad()
+            loss = criterion(self.operator.forward(x_0_hat['img']), measurement)
+            loss.backward()
+            optimizer.step()
+        
+        return x_0_hat, loss
+    
+    def conditioning(self, x_0_hat, measurement, steps, **kwargs):
+        x_0_hat['img'].detach_()
+        x_0_hat, norm = self.gradient_descent(x_0_hat, measurement, steps, **kwargs)
         
         return x_0_hat, norm
     
@@ -115,50 +144,41 @@ class MLEM(BlindConditioningMethod):
         assert kwargs.get('scale') is not None
         self.scale = kwargs.get('scale')
         np.random.seed(123)
-
-    def mlem(self, observation, x_0_hat, steps, clip, filter_epsilon, **kwargs):
+    
+    def mlem(self, observation, x_0_hat, steps, clip, filter_epsilon, device, **kwargs):
         img = x_0_hat['img']
+        # kernel = x_0_hat['kernel'].repeat(1,3,1,1)
         kernel = x_0_hat['kernel']
         
-        image = observation.detach().cpu().numpy().astype(np.float32, copy=True)
-        psf = kernel.detach().cpu().numpy().astype(np.float32, copy=False)
-        # im_deconv = np.full(image.shape, 0.5, dtype=np.float32)
-        im_deconv = img.detach().cpu().numpy().astype(np.float32, copy=True)
-        psf_mirror = np.flip(psf)
-
+        image = observation.to(torch.float32).clone().to(device)
+        psf = kernel.to(torch.float32).clone().to(device)
+        im_deconv = img.to(torch.float32).clone().to(device)
+        psf_mirror = torch.flip(psf, dims=[0, 1])
         # Small regularization parameter used to avoid 0 divisions
-        eps = 1e-12
+        eps = 1e-6
+        with torch.no_grad():
+            pad = (psf.size(2) // 2, psf.size(2) // 2, psf.size(3) // 2, psf.size(3) // 2)
 
-        for _ in range(steps):
-            conv = convolve(im_deconv, psf, mode='same') + eps
-            if filter_epsilon:
-                relative_blur = np.where(conv < filter_epsilon, 0, image / conv)
-            else:
-                relative_blur = image / conv
-            im_deconv *= convolve(relative_blur, psf_mirror, mode='same')
+            for _ in range(steps):
+                conv = F.conv2d(F.pad(im_deconv, pad, mode='replicate'), psf) + eps
+                if filter_epsilon:
+                    relative_blur = torch.where(conv < filter_epsilon, torch.tensor(0.0, device=device), image / conv)
+                else:
+                    relative_blur = image / conv
+                im_deconv *= F.conv2d(F.pad(relative_blur, pad, mode='replicate'), psf_mirror)
 
-        if clip:
-            im_deconv[im_deconv > 1] = 1
-            im_deconv[im_deconv < -1] = -1
+            if clip:
+                im_deconv = torch.clamp(im_deconv, -1, 1)
 
-        x_0_hat['img'] = torch.from_numpy(im_deconv).to('cuda')
-    
+            x_0_hat['img'] = im_deconv.to(device)
+        # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy().swapaxes(0, 1).swapaxes(1, 2))
+        # plt.show()
         return x_0_hat, 0
-
     
-    def conditioning(self, x_0_hat, x_0_hat_prev, measurement, **kwargs):
-        steps = 20
-        # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
-        # plt.colorbar()
-        # plt.title('Before MLEM')
-        # plt.show()
+    def conditioning(self, x_0_hat, measurement, steps, **kwargs):
         
-        x_0_hat, norm = self.mlem(observation=measurement, x_0_hat=x_0_hat, steps=steps, clip=False, filter_epsilon=1e-3, **kwargs)
-        # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy())
-        # plt.colorbar()
-        # plt.title('After MLEM')
-        # plt.show()
-        
+        x_0_hat, norm = self.mlem(observation=measurement, x_0_hat=x_0_hat, steps=steps, clip=False, filter_epsilon=1e-3, device='cuda', **kwargs)
+
         return x_0_hat, norm
     
 @register_conditioning_method(name='wiener')

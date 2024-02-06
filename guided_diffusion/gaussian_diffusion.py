@@ -436,46 +436,40 @@ class BlindDPS(DDPM):
         
         norm_array = []  # Array to store the norm values
         
-        conv = Blurkernel(blur_type='gaussian', kernel_size=15, std=3, device=device)
-        gaussian_kernel = conv.get_kernel().type(torch.float32)
-        gaussian_kernel = gaussian_kernel.to(device).view(1, 1, 15, 15)
-        
-        operator = BlindBlurOperator(device=device)
-        
         x_0_hat = dict()
-        x_0_hat_prev = dict()
-        x_0_hat_prev['img'] = x_start['img']
-
+        x_0_hat['img'] = x_start['img']
+        x_0_hat['kernel'] = x_start['kernel']
+        
         for idx in pbar:
+            
+            steps = 20 
+            
+            updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
+                                    measurement=measurement,
+                                    steps=steps)
+
+            x_0_hat['img'] = updated['img']
+
             # time = torch.tensor([idx] * batch_size, device=device)
             time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
-            # time = torch.randint(low=1, high=self.num_timesteps-1, size=(batch_size,), device=device)
+            # time = torch.randint(low=self.num_timesteps // 2, high=self.num_timesteps-1, size=(batch_size,), device=device)
             
-            x_prev['img'] = self.q_sample(x_0_hat_prev['img'], t=time)
-            
-            x_prev = dict((k, v.requires_grad_()) for k, v in x_prev.items())
-            
-            # diffusion prior cases 
-            output = dict() 
-            output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
-            x_prev['img'] = output['img']['sample']
+            with torch.no_grad():
+                x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
+                
+                # diffusion prior cases 
+                output = dict() 
+                output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
+                x_prev['img'] = output['img']['sample']
 
-            x_0_hat['img'] = output['img']['pred_xstart']
-            x_0_hat['kernel'] = x_start['kernel']
-            
-            # scale = torch.from_numpy(self.sqrt_alphas_cumprod).to(time.device)[time].float()
-            # scale = 2.0 * (idx / self.num_timesteps)
-            scale = 0.5
-            
-            x_0_hat_prev = x_0_hat 
-            diff = gt - x_0_hat['img']
-            norm = torch.abs(diff).mean()
-            norm_array.append(norm.item())  # Append the norm value to the array
-            pbar.set_postfix({'norm': norm.item()}, refresh=True)
-            
-            if(idx == 0):
-                return x_0_hat, norm_array
-            scale = {k: scale for k in output.keys()}
+                x_0_hat['img'] = output['img']['pred_xstart']
+                x_0_hat['img'] = torch.clamp(x_0_hat['img'], 0)
+                x_0_hat['kernel'] = x_start['kernel']
+
+                diff = gt - x_0_hat['img']
+                norm = torch.abs(diff).mean()
+                norm_array.append(norm.item())  # Append the norm value to the array
+                pbar.set_postfix({'norm': norm.item()}, refresh=True)
 
             if record:
                 if idx % 1 == 0:
@@ -483,7 +477,7 @@ class BlindDPS(DDPM):
                     if not os.path.isdir(save_dir): 
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imshow(x_0_hat['img'].squeeze().cpu().detach().numpy().T)
+                    plt.imshow(x_0_hat['img'].squeeze().cpu().detach().numpy())
                     plt.colorbar()
                     plt.savefig(file_path)
                     plt.close()
@@ -505,18 +499,6 @@ class BlindDPS(DDPM):
                     plt.colorbar()
                     plt.savefig(file_path)
                     plt.close()
-            
-            updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
-                                                measurement=measurement,
-                                                x_0_hat_prev=x_0_hat_prev,
-                                                scale=scale,
-                                                idx=idx)
-            
-            updated['img'] = updated['img'].detach()
-            x_0_hat['img'] = updated['img']
-
-
-            x_0_hat_prev = {k: v.requires_grad_() for k, v in x_0_hat_prev.items()}
         
         return x_0_hat, norm_array
     
@@ -548,15 +530,9 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
     if schedule_name == "fast":
         # Linear schedule from Ho et al, extended to work for any number of
         # diffusion steps.
-        scale = 1000 / num_diffusion_timesteps
-
-        # beta_start = scale * 0.000001
-        # beta_end = scale * 0.0002
         
         beta_start = 0.00001
         beta_end = 0.002
-        # beta_start = 1e-16
-        # beta_end = 1e-16
 
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64

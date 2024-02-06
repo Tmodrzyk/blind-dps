@@ -316,8 +316,9 @@ class Blurkernel(nn.Module):
         self.std = std
         self.device = device
         self.seq = nn.Sequential(
-            nn.ReflectionPad2d(self.kernel_size//2),
-            nn.Conv2d(3, 3, self.kernel_size, stride=1, padding=0, bias=False, groups=3)
+            nn.Conv2d(1, 1, self.kernel_size, stride=1, padding=self.kernel_size//2, padding_mode='replicate', bias=False, groups=1)
+            # nn.Conv2d(3, 3, self.kernel_size, stride=1, padding=self.kernel_size//2, padding_mode='replicate', bias=False, groups=3)
+            
         )
 
         self.weights_init()
