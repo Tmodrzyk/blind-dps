@@ -147,8 +147,8 @@ class MLEM(BlindConditioningMethod):
     
     def mlem(self, observation, x_0_hat, steps, clip, filter_epsilon, device, **kwargs):
         img = x_0_hat['img']
-        kernel = x_0_hat['kernel'].repeat(1,3,1,1)
-        # kernel = x_0_hat['kernel']
+        # kernel = x_0_hat['kernel'].repeat(1,3,1,1)
+        kernel = x_0_hat['kernel']
         
         image = observation.to(torch.float32).clone().to(device)
         psf = kernel.to(torch.float32).clone().to(device)

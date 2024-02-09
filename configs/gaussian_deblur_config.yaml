@@ -5,8 +5,9 @@ conditioning:
     # scale: 0.3
 
 data:
-  name: ffhq
-  root: ./data/samples/
+  name: ellipse
+  # root: /home/modrzyk/code/data/ellipses/img/val/
+  root: /home/modrzyk/code/blind-dps/data/ellipse_samples/
 
 intensity: 0
 kernel_size: 65
@@ -18,8 +19,8 @@ kernel: gaussian
 measurement:
   noise:
     name: gaussian
-    sigma: 0.02
+    sigma: 0.05
   operator:
     name: gaussian_blur
-    kernel_size: 65
+    kernel_size: 61
     intensity: 3.0
