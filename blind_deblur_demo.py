@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/ellipse/hybrid/')
+    parser.add_argument('--save_dir', type=str, default='./results/ffhq/hybrid2/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -68,8 +68,8 @@ def main():
     args.kernel_std = task_config["kernel_std"]
     
     # Load model
-    img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
-    # img_model = guided_diffusion.unet.create_model(**img_model_config)
+    # img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
+    img_model = guided_diffusion.unet.create_model(**img_model_config)
     img_model = img_model.to(device)
     img_model.eval()
     
@@ -131,66 +131,68 @@ def main():
     
     # Do Inference
     for i, ref_img in enumerate(loader):
-        logger.info(f"Inference for image {i}")
-        fname = str(i).zfill(5) + '.png'
-        ref_img = ref_img.to(device)
+        if(i==2):
+            logger.info(f"Inference for image {i}")
+            fname = str(i).zfill(5) + '.png'
+            ref_img = ref_img.to(device)
 
-        if args.kernel == 'motion':
-            kernel = Kernel(size=(args.kernel_size, args.kernel_size), intensity=args.intensity).kernelMatrix
-            kernel = torch.from_numpy(kernel).type(torch.float32)
-            kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
-        elif args.kernel == 'gaussian':
-            conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.kernel_std, device=device)
-            kernel = conv.get_kernel().type(torch.float32)
-            kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
-        
-        # Forward measurement model (Ax + n)
-        # y = operator.forward(ref_img, kernel)
-        y = operator.forward(ref_img)
-        y_n = noiser(y)
-        y_n = torch.clamp(y_n, 0)
-        
-        dirac_kernel = torch.zeros(kernel.shape, device=device)
-        center_index = (0, 0, kernel.shape[2] // 2, kernel.shape[3] // 2)
-        dirac_kernel[center_index] = 1.0
+            if args.kernel == 'motion':
+                kernel = Kernel(size=(args.kernel_size, args.kernel_size), intensity=args.intensity).kernelMatrix
+                kernel = torch.from_numpy(kernel).type(torch.float32)
+                kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
+            elif args.kernel == 'gaussian':
+                conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.kernel_std, device=device)
+                kernel = conv.get_kernel().type(torch.float32)
+                kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
             
-        x_start = {'img': y_n,
-                'kernel': kernel}
- 
-        # x_start = {'img': y_n.requires_grad_(),
-        #         'kernel': kernel.requires_grad_()}
-        
-        # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
-        for k in x_start:
-            if k in model.keys():
-                logger.info(f"{k} will use diffusion prior")
-            else:
-                logger.info(f"{k} will use uniform prior.")
+            # Forward measurement model (Ax + n)
+            # y = operator.forward(ref_img, kernel)
+            y = operator.forward(ref_img)
+            y_n = noiser(y)
+            y_n = torch.clamp(y_n, 0)
+            
+            dirac_kernel = torch.zeros(kernel.shape, device=device)
+            center_index = (0, 0, kernel.shape[2] // 2, kernel.shape[3] // 2)
+            dirac_kernel[center_index] = 1.0
+                
+            x_start = {'img': y_n,
+                    'kernel': kernel}
     
-        # sample 
-        sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path, gt=ref_img)
-
-        plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
-        plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
-        plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
-        plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
+            # x_start = {'img': y_n.requires_grad_(),
+            #         'kernel': kernel.requires_grad_()}
+            
+            # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
+            for k in x_start:
+                if k in model.keys():
+                    logger.info(f"{k} will use diffusion prior")
+                else:
+                    logger.info(f"{k} will use uniform prior.")
         
-        plt.imshow((sample['img'] - ref_img).squeeze().detach().cpu().numpy())
-        plt.colorbar()
-        plt.savefig(os.path.join(out_path, 'recon', 'diff_'+fname))
-        plt.close()
+            # sample 
+            sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path, gt=ref_img)
 
-        plt.plot(range(sampler.num_timesteps), norms)
-        plt.xlabel('Iteration Index')
-        plt.ylabel('Norm')
-        plt.ylim(bottom=0, top=max(norms))  # Set the Y-axis range
-        
-        save_dir = os.path.join(out_path, f'progress_norm/')
-        if not os.path.isdir(save_dir):
-            os.makedirs(save_dir, exist_ok=True)
-        plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
-        plt.close()
+            plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
+            plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
+            plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
+            plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
+            
+            plt.imshow((sample['img'] - ref_img).squeeze().detach().cpu().numpy().swapaxes(0, 2).swapaxes(0, 1))
+            plt.colorbar()
+            plt.savefig(os.path.join(out_path, 'recon', 'diff_'+fname))
+            plt.close()
 
-        break
+            plt.plot(range(sampler.num_timesteps), norms)
+            plt.xlabel('Iteration Index')
+            plt.ylabel('Norm')
+            plt.ylim(bottom=0, top=max(norms))  # Set the Y-axis range
+            
+            save_dir = os.path.join(out_path, f'progress_norm/')
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
+            plt.close()
+
+            break
+
 if __name__ == '__main__':
     main()

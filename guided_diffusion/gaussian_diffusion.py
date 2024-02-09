@@ -438,38 +438,57 @@ class BlindDPS(DDPM):
         
         x_0_hat = dict()
         x_0_hat['img'] = x_start['img']
+        
         x_0_hat['kernel'] = x_start['kernel']
+        
+        time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
+        # x_t = dict()
+        # x_t['img'] = self.q_sample(x_0_hat['img'], t=time)
+        # x_t['img'] = self.p_sample(x=x_t['img'], t=time, model=model['img'])['sample']
         
         for idx in pbar:
             
-            steps = 20 
-            
+            steps = idx
+                
             updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
                                     measurement=measurement,
                                     steps=steps)
-
+            
             x_0_hat['img'] = updated['img']
 
-            # time = torch.tensor([idx] * batch_size, device=device)
-            time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
-            # time = torch.randint(low=self.num_timesteps // 2, high=self.num_timesteps-1, size=(batch_size,), device=device)
+            save_dir = os.path.join(save_root, 'progress_RL/img/')
+            if not os.path.isdir(save_dir): 
+                os.makedirs(save_dir, exist_ok=True)
+            file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+            plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy().swapaxes(0, 2).swapaxes(0, 1))
+            plt.close()
+
             
             with torch.no_grad():
+                time = torch.tensor([idx] * batch_size, device=device)
+                # time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
+                # time = torch.randint(low=1, high=self.num_timesteps-1, size=(batch_size,), device=device)
+                
                 x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
                 
+                # posterior_mean, posterior_variance, _ = self.q_posterior_mean_variance(x_t['img'], x_0_hat['img'], t=time)
+                # x_prev['img'] = posterior_mean + torch.sqrt(posterior_variance) * torch.randn_like(posterior_mean)
+
                 # diffusion prior cases 
                 output = dict() 
+                
                 output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
                 x_prev['img'] = output['img']['sample']
 
                 x_0_hat['img'] = output['img']['pred_xstart']
                 x_0_hat['img'] = torch.clamp(x_0_hat['img'], 0)
-                x_0_hat['kernel'] = x_start['kernel']
 
-                diff = gt - x_0_hat['img']
-                norm = torch.abs(diff).mean()
+                diff = (gt - x_0_hat['img'])**2
+                norm = diff.mean()
                 norm_array.append(norm.item())  # Append the norm value to the array
                 pbar.set_postfix({'norm': norm.item()}, refresh=True)
+
+
 
             if record:
                 if idx % 1 == 0:
@@ -477,27 +496,21 @@ class BlindDPS(DDPM):
                     if not os.path.isdir(save_dir): 
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imshow(x_0_hat['img'].squeeze().cpu().detach().numpy())
-                    plt.colorbar()
-                    plt.savefig(file_path)
+                    plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy().swapaxes(0, 2).swapaxes(0, 1))
                     plt.close()
                         
                     save_dir = os.path.join(save_root, 'progress_x_t/img/')
                     if not os.path.isdir(save_dir):
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imshow(clear_color(x_prev['img']))
-                    plt.colorbar()
-                    plt.savefig(file_path)
+                    plt.imsave(file_path, clear_color(x_prev['img']))
                     plt.close()
                     
                     save_dir = os.path.join(save_root, 'progress_diff/img/')
                     if not os.path.isdir(save_dir):
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imshow(clear_color(diff))
-                    plt.colorbar()
-                    plt.savefig(file_path)
+                    plt.imsave(file_path, clear_color(diff))
                     plt.close()
         
         return x_0_hat, norm_array
@@ -531,7 +544,7 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # Linear schedule from Ho et al, extended to work for any number of
         # diffusion steps.
         
-        beta_start = 0.00001
+        beta_start = 0.0001
         beta_end = 0.002
 
         return np.linspace(

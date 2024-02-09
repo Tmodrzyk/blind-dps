@@ -147,8 +147,8 @@ class MLEM(BlindConditioningMethod):
     
     def mlem(self, observation, x_0_hat, steps, clip, filter_epsilon, device, **kwargs):
         img = x_0_hat['img']
-        # kernel = x_0_hat['kernel'].repeat(1,3,1,1)
-        kernel = x_0_hat['kernel']
+        kernel = x_0_hat['kernel'].repeat(1,3,1,1)
+        # kernel = x_0_hat['kernel']
         
         image = observation.to(torch.float32).clone().to(device)
         psf = kernel.to(torch.float32).clone().to(device)
@@ -168,7 +168,7 @@ class MLEM(BlindConditioningMethod):
                 im_deconv *= F.conv2d(F.pad(relative_blur, pad, mode='replicate'), psf_mirror)
 
             if clip:
-                im_deconv = torch.clamp(im_deconv, -1, 1)
+                im_deconv = torch.clamp(im_deconv, 0, 1)
 
             x_0_hat['img'] = im_deconv.to(device)
         # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy().swapaxes(0, 1).swapaxes(1, 2))
@@ -177,7 +177,7 @@ class MLEM(BlindConditioningMethod):
     
     def conditioning(self, x_0_hat, measurement, steps, **kwargs):
         
-        x_0_hat, norm = self.mlem(observation=measurement, x_0_hat=x_0_hat, steps=steps, clip=False, filter_epsilon=1e-3, device='cuda', **kwargs)
+        x_0_hat, norm = self.mlem(observation=measurement, x_0_hat=x_0_hat, steps=steps, clip=True, filter_epsilon=1e-6, device='cuda', **kwargs)
 
         return x_0_hat, norm
     
