@@ -6,8 +6,8 @@ conditioning:
 
 data:
   name: ellipse
-  # root: /home/modrzyk/code/data/ellipses/img/val/
-  root: /home/modrzyk/code/blind-dps/data/ellipse_samples/
+  root: /home/modrzyk/code/data/ellipses/img/val/
+  # root: /home/modrzyk/code/blind-dps/data/ellipse_samples/
 
 intensity: 0
 kernel_size: 65
