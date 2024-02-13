@@ -415,7 +415,6 @@ class DDIM(SpacedDiffusion):
 
 @register_sampler(name='blind_dps')
 class BlindDPS(DDPM):
-    import matplotlib.pyplot as plt
     def p_sample_loop(self, 
                       model: dict,
                       x_start: dict,
@@ -423,7 +422,8 @@ class BlindDPS(DDPM):
                       measurement_cond_fn,
                       record,
                       save_root, 
-                      gt):
+                      gt, 
+                      M):
        
         assert isinstance(model, dict) and isinstance(x_start, dict)
         
@@ -448,27 +448,20 @@ class BlindDPS(DDPM):
         
         for idx in list(range(self.num_timesteps))[::-1]:
             
-            steps = 20
             updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
                                     measurement=measurement,
-                                    steps=steps)
+                                    steps=M)
             
             x_0_hat['img'] = updated['img']
-
-            save_dir = os.path.join(save_root, 'progress_RL/img/')
-            if not os.path.isdir(save_dir): 
-                os.makedirs(save_dir, exist_ok=True)
-            file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-            plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy())
-            plt.close()
+            x_0_hat_RL = x_0_hat['img']
 
             
             with torch.no_grad():
-                if(idx > 10):
-                    time = torch.tensor([idx] * batch_size, device=device)
-                else: 
-                    time = torch.tensor([10] * batch_size, device=device)
-                # time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
+                # if(idx > 10):
+                #     time = torch.tensor([idx] * batch_size, device=device)
+                # else: 
+                #     time = torch.tensor([10] * batch_size, device=device)
+                time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
                 # time = torch.randint(low=1, high=self.num_timesteps-1, size=(batch_size,), device=device)
                 
                 x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
@@ -498,14 +491,14 @@ class BlindDPS(DDPM):
                     if not os.path.isdir(save_dir): 
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy())
+                    plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy(), cmap='gray')
                     plt.close()
                         
                     save_dir = os.path.join(save_root, 'progress_x_t/img/')
                     if not os.path.isdir(save_dir):
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, clear_color(x_prev['img']))
+                    plt.imsave(file_path, x_prev['img'].squeeze().cpu().detach().numpy(), cmap='gray')
                     plt.close()
                     
                     save_dir = os.path.join(save_root, 'progress_diff/img/')
@@ -514,6 +507,14 @@ class BlindDPS(DDPM):
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
                     plt.imsave(file_path, clear_color(diff))
                     plt.close()
+                    
+                    save_dir = os.path.join(save_root, 'progress_RL/img/')
+                    if not os.path.isdir(save_dir): 
+                        os.makedirs(save_dir, exist_ok=True)
+                    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                    plt.imsave(file_path, x_0_hat_RL.squeeze().cpu().detach().numpy(), cmap='gray')
+                    plt.close()
+
         
         return x_0_hat, norm_array
     

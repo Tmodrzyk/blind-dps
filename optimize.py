@@ -23,6 +23,9 @@ from util.img_utils import Blurkernel, clear_color
 from util.logger import get_logger
 from tqdm import tqdm
 
+from skimage.metrics import peak_signal_noise_ratio, structural_similarity 
+import optuna
+
 def load_yaml(file_path: str) -> dict:
     with open(file_path) as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
@@ -45,7 +48,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/ellipse/hybrid_max_timestep/')
+    parser.add_argument('--save_dir', type=str, default='./results/ellipse/hybrid/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -120,24 +123,22 @@ def main():
     # Prepare dataloader
     data_config = task_config['data']
     transform = transforms.Compose([transforms.ToTensor(),
-                                    # transforms.Grayscale(num_output_channels=3),
-                                    # transforms.Resize((256, 256)),
-                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                                    # Careful with the normalization, it caused the reconstruction to fail
-                                    # transforms.Normalize(0.5, 0.5)
-                                    
                                     ])
     dataset = get_dataset(**data_config, transforms=transform)
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
-    
-    # Do Inference
-    for i, ref_img in enumerate(tqdm(loader)):
+    def objective(trial):
+        params = {
+            'M': trial.suggest_int('M', 1, 30),
+            'N': trial.suggest_int('N', 10, 40),
+        }
         
-        # logger.info(f"Inference for image {i}")
-        fname = str(i).zfill(5) + '.png'
-        ref_img = ref_img.to(device)
-
+        diffusion_config['steps'] = params['N']
+        diffusion_config['timestep_respacing'] = params['N']
+        
+        sampler = create_sampler(**diffusion_config) 
+        sample_fn = partial(sampler.p_sample_loop, model=model, measurement_cond_fn=measurement_cond_fn)
+        
         if args.kernel == 'motion':
             kernel = Kernel(size=(args.kernel_size, args.kernel_size), intensity=args.intensity).kernelMatrix
             kernel = torch.from_numpy(kernel).type(torch.float32)
@@ -146,53 +147,36 @@ def main():
             conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.kernel_std, device=device)
             kernel = conv.get_kernel().type(torch.float32)
             kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
-        
-        # Forward measurement model (Ax + n)
-        # y = operator.forward(ref_img, kernel)
-        y = operator.forward(ref_img)
-        y_n = noiser(y)
-        y_n = torch.clamp(y_n, 0)
-        
-        dirac_kernel = torch.zeros(kernel.shape, device=device)
-        center_index = (0, 0, kernel.shape[2] // 2, kernel.shape[3] // 2)
-        dirac_kernel[center_index] = 1.0
             
-        x_start = {'img': y_n,
-                'kernel': kernel}
-
-        # x_start = {'img': y_n.requires_grad_(),
-        #         'kernel': kernel.requires_grad_()}
+        psnr_list = []
         
-        # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
-        # for k in x_start:
-        #     if k in model.keys():
-        #         logger.info(f"{k} will use diffusion prior")
-        #     else:
-        #         logger.info(f"{k} will use uniform prior.")
+        # Do Inference
+        for i, ref_img in enumerate(tqdm(loader)):
+
+            fname = str(i).zfill(5) + '.png'
+            ref_img = ref_img.to(device)
+            
+            y = operator.forward(ref_img)
+            y_n = noiser(y)
+            y_n = torch.clamp(y_n, 0)
+            
+            x_start = {'img': y_n,
+                    'kernel': kernel}
+
+            sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path, gt=ref_img, M=params['M'])
+            sample_img = sample['img'].squeeze().detach().cpu().numpy()
+            ref_img = ref_img.squeeze().detach().cpu().numpy()
+            psnr_list += [peak_signal_noise_ratio(ref_img, sample_img)]
+        
+        score = np.mean(psnr_list)
+        
+        return score
     
-        # sample 
-        sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path, gt=ref_img, M=15)
+    study = optuna.create_study(direction="maximize", storage="sqlite:///db.sqlite3", study_name="diffusion")
+    study.optimize(objective, n_trials=50)
+    
+    print("Best hyperparameters : ", study.best_params)
+    print("Best score : ", study.best_value)
 
-        plt.imsave(os.path.join(out_path, 'input', fname), y_n.squeeze().detach().cpu().numpy(), cmap='gray')
-        # plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
-        plt.imsave(os.path.join(out_path, 'label', fname), ref_img.squeeze().detach().cpu().numpy(), cmap='gray')
-        plt.imsave(os.path.join(out_path, 'recon', fname), sample['img'].squeeze().detach().cpu().numpy(), cmap='gray')
-        
-        # plt.imshow((sample['img'] - ref_img).squeeze().detach().cpu().numpy())
-        # plt.colorbar()
-        # plt.savefig(os.path.join(out_path, 'recon', 'diff_'+fname))
-        # plt.close()
-
-        # plt.plot(range(sampler.num_timesteps), norms)
-        # plt.xlabel('Iteration Index')
-        # plt.ylabel('Norm')
-        # plt.ylim(bottom=0, top=max(norms))  # Set the Y-axis range
-        
-        # save_dir = os.path.join(out_path, f'progress_norm/')
-        # if not os.path.isdir(save_dir):
-        #     os.makedirs(save_dir, exist_ok=True)
-        # plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
-        # plt.close()
-        
 if __name__ == '__main__':
     main()
