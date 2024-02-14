@@ -491,14 +491,14 @@ class BlindDPS(DDPM):
                     if not os.path.isdir(save_dir): 
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy(), cmap='gray')
+                    plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy(), cmap='viridis')
                     plt.close()
                         
                     save_dir = os.path.join(save_root, 'progress_x_t/img/')
                     if not os.path.isdir(save_dir):
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, x_prev['img'].squeeze().cpu().detach().numpy(), cmap='gray')
+                    plt.imsave(file_path, x_prev['img'].squeeze().cpu().detach().numpy(), cmap='viridis')
                     plt.close()
                     
                     save_dir = os.path.join(save_root, 'progress_diff/img/')
@@ -512,7 +512,7 @@ class BlindDPS(DDPM):
                     if not os.path.isdir(save_dir): 
                         os.makedirs(save_dir, exist_ok=True)
                     file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, x_0_hat_RL.squeeze().cpu().detach().numpy(), cmap='gray')
+                    plt.imsave(file_path, x_0_hat_RL.squeeze().cpu().detach().numpy(), cmap='viridis')
                     plt.close()
 
         

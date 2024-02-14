@@ -9,6 +9,7 @@ import os
 import cv2
 from PIL import Image
 import seaborn as sns
+import pandas as pd
 
 device = 'cuda:0'
 
@@ -26,7 +27,12 @@ def stats(label_root, recon_root):
     psnr_img_list = []
     ssim_img_list = []
 
-    for idx in tqdm(range(200)):
+    crc_component_list = []
+    area_component_list = []
+    
+    res_dict = {}
+    
+    for idx in tqdm(range(1000)):
         fname = str(idx).zfill(5)
 
         label = Image.open(os.path.join(label_root, f'{fname}.png')).convert("L")
@@ -37,25 +43,30 @@ def stats(label_root, recon_root):
 
         
         # Apply a simple threshold to create a binary mask
-        _, binary_mask = cv2.threshold(label, 0, 50, cv2.THRESH_BINARY)
+        _, binary_mask = cv2.threshold(label, 65, 255, cv2.THRESH_BINARY)
         
         # Find contours in the binary mask
         contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        crc_component_list = []
-        area_component_list = []
+
         activity_label_img = 0
         activity_recon_img = 0
+        
+        skip = False
         
         # Iterate over each contour
         for contour in contours:
             # Create a mask for each contour
             
             mask = np.zeros_like(label)
+            
             cv2.drawContours(mask, [contour], 0, 255, thickness=cv2.FILLED)
 
             area = np.count_nonzero(mask)
-
+            
+            if(area > 1000):
+                skip = True
+                break
             # Extract the sub-region from both label and normal_recon using the mask
             
             label_component = cv2.bitwise_and(label, label, mask=mask)
@@ -80,6 +91,8 @@ def stats(label_root, recon_root):
             area_component_list.append(area)
             
         # Concentration Recovery Coefficient 
+        if skip:
+            continue
         
         crc_img = activity_recon_img / activity_label_img
         crc_err = np.abs(1 - crc_img)
@@ -95,64 +108,77 @@ def stats(label_root, recon_root):
         crc_list.append(crc_err)
         psnr_img_list.append(psnr_img)
         ssim_img_list.append(ssim_img)
-    
-    plt.scatter(area_component_list, crc_component_list)
-    plt.xlabel('Area')
-    plt.ylabel('CRC Error')
-    plt.title('CRC Error vs. Area')
-    plt.grid(True)
-    plt.show()
 
-    return psnr_normal_list, crc_list, psnr_img_list, ssim_img_list
+    res_dict['psnr_normal'] = psnr_normal_list
+    res_dict['crc'] = crc_list
+    res_dict['psnr_img'] = psnr_img_list
+    res_dict['ssim_img'] = ssim_img_list
+    res_dict['crc_component'] = crc_component_list
+    res_dict['area_component'] = area_component_list
+
+    return res_dict
 
 
 label_root = Path(f'/home/modrzyk/code/blind-dps/results/ellipse/hybrid_N30_M20/{task}/label/')
-recon_root_ours = Path(f'/home/modrzyk/code/blind-dps/results/ellipse/hybrid_N30_M20/{task}/recon/')
+recon_root_ours = Path(f'/home/modrzyk/code/blind-dps/results/ellipse/hybrid_max_timestep/{task}/recon/')
 recon_root_posterior_sampling = Path(f'/home/modrzyk/code/diffusion-posterior-sampling/results/{task}/recon/')
 recon_root_richarson_lucy = Path(f'/home/modrzyk/code/blind-dps/results/ellipse/richardson-lucy/recon/')
 
-psnr_normal_list_ours, crc_list_ours, \
-psnr_img_list_ours, ssim_img_list_ours = stats(label_root, recon_root_ours)
+res_ours = stats(label_root, recon_root_ours)
+res_posterior_sampling = stats(label_root, recon_root_posterior_sampling)
+res_richardson_lucy = stats(label_root, recon_root_richarson_lucy)
 
-psnr_normal_list_posterior_sampling, crc_list_posterior_sampling, \
-psnr_img_list_posterior_sampling, ssim_img_list_posterior_sampling \
-    = stats(label_root, recon_root_posterior_sampling)
+df_ours = pd.DataFrame({'Area': res_ours['area_component'], 'CRC Error': res_ours['crc_component']})
+df_posterior_sampling = pd.DataFrame({'Area': res_posterior_sampling['area_component'], 'CRC Error': res_posterior_sampling['crc_component']})
+df_richardson_lucy = pd.DataFrame({'Area': res_richardson_lucy['area_component'], 'CRC Error': res_richardson_lucy['crc_component']})
 
-psnr_normal_list_richardson_lucy, crc_list_richardson_lucy, \
-psnr_img_list_richardson_lucy, ssim_img_list_richardson_lucy \
-    = stats(label_root, recon_root_richarson_lucy)
-    
+mean_crc_by_area_ours = df_ours.groupby('Area')['CRC Error'].mean()
+mean_crc_by_area_posterior_sampling = df_posterior_sampling.groupby('Area')['CRC Error'].mean()
+mean_crc_by_area_richardson_lucy = df_richardson_lucy.groupby('Area')['CRC Error'].mean()
+
+
+# plt.scatter(res_ours['area_component'], res_ours['crc_component'], label='Ours', alpha=0.5)
+# plt.scatter(res_posterior_sampling['area_component'], res_posterior_sampling['crc_component'], label='DPS', alpha=0.5)
+# plt.scatter(res_richardson_lucy['area_component'], res_richardson_lucy['crc_component'], label='Richardson-Lucy', alpha=0.5)
+
+# plt.xlabel('Area')
+# plt.ylabel('CRC Error')
+# plt.title('CRC Error vs. Area')
+# plt.grid(True)
+# plt.legend()
+# plt.show()
+
 # Calculate average
-psnr_normal_avg_ours = sum(psnr_normal_list_ours) / len(psnr_normal_list_ours)
-crc_avg_ours = sum(crc_list_ours) / len(crc_list_ours)
-psnr_img_ours = sum(psnr_img_list_ours) / len(psnr_img_list_ours)
-ssim_img_ours = sum(ssim_img_list_ours) / len(ssim_img_list_ours)
+psnr_normal_avg_ours = np.mean(res_ours['psnr_normal'])
+crc_avg_ours = np.mean(res_ours['crc'])
+psnr_img_ours = np.mean(res_ours['psnr_img'])
+ssim_img_ours = np.mean(res_ours['ssim_img'])
 
-psnr_normal_avg_ours_posterior_sampling = sum(psnr_normal_list_posterior_sampling) / len(psnr_normal_list_posterior_sampling)
-crc_avg_posterior_sampling = sum(crc_list_posterior_sampling) / len(crc_list_posterior_sampling)
-psnr_img_posterior_sampling = sum(psnr_img_list_posterior_sampling) / len(psnr_img_list_posterior_sampling)
-ssim_img_posterior_sampling = sum(ssim_img_list_posterior_sampling) / len(ssim_img_list_posterior_sampling)
+psnr_normal_avg_ours_posterior_sampling = np.mean(res_posterior_sampling['psnr_normal'])
+crc_avg_posterior_sampling = np.mean(res_posterior_sampling['crc'])
+psnr_img_posterior_sampling = np.mean(res_posterior_sampling['psnr_img'])
+ssim_img_posterior_sampling = np.mean(res_posterior_sampling['ssim_img'])
 
-psnr_normal_avg_richardson_lucy = sum(psnr_normal_list_richardson_lucy) / len(psnr_normal_list_richardson_lucy)
-crc_avg_richardson_lucy = sum(crc_list_richardson_lucy) / len(crc_list_richardson_lucy)
-psnr_img_richardson_lucy = sum(psnr_img_list_richardson_lucy) / len(psnr_img_list_richardson_lucy)
-ssim_img_richardson_lucy = sum(ssim_img_list_richardson_lucy) / len(ssim_img_list_richardson_lucy)
+psnr_normal_avg_richardson_lucy = np.mean(res_richardson_lucy['psnr_normal'])
+crc_avg_richardson_lucy = np.mean(res_richardson_lucy['crc'])
+psnr_img_richardson_lucy = np.mean(res_richardson_lucy['psnr_img'])
+ssim_img_richardson_lucy = np.mean(res_richardson_lucy['ssim_img'])
 
 # Calculate standard deviation
-psnr_normal_std_ours = np.std(psnr_normal_list_ours)
-crc_std_ours = np.std(crc_list_ours)
-psnr_img_std_ours = np.std(psnr_img_list_ours)
-ssim_img_std_ours = np.std(ssim_img_list_ours)
+psnr_normal_std_ours = np.std(res_ours['psnr_normal'])
+crc_std_ours = np.std(res_ours['crc'])
+psnr_img_std_ours = np.std(res_ours['psnr_img'])
+ssim_img_std_ours = np.std(res_ours['ssim_img'])
 
-psnr_normal_std_posterior_sampling = np.std(psnr_normal_list_posterior_sampling)
-crc_std_posterior_sampling = np.std(crc_list_posterior_sampling)
-psnr_img_std_posterior_sampling = np.std(psnr_img_list_posterior_sampling)
-ssim_img_std_posterior_sampling = np.std(ssim_img_list_posterior_sampling)
+psnr_normal_std_posterior_sampling = np.std(res_posterior_sampling['psnr_normal'])
+crc_std_posterior_sampling = np.std(res_posterior_sampling['crc'])
+psnr_img_std_posterior_sampling = np.std(res_posterior_sampling['psnr_img'])
+ssim_img_std_posterior_sampling = np.std(res_posterior_sampling['ssim_img'])
 
-psnr_normal_std_richardson_lucy = np.std(psnr_normal_list_richardson_lucy)
-crc_std_richardson_lucy = np.std(crc_list_richardson_lucy)
-psnr_img_std_richardson_lucy = np.std(psnr_img_list_richardson_lucy)
-ssim_img_std_richardson_lucy = np.std(ssim_img_list_richardson_lucy)
+psnr_normal_std_richardson_lucy = np.std(res_richardson_lucy['psnr_normal'])
+crc_std_richardson_lucy = np.std(res_richardson_lucy['crc'])
+psnr_img_std_richardson_lucy = np.std(res_richardson_lucy['psnr_img'])
+ssim_img_std_richardson_lucy = np.std(res_richardson_lucy['ssim_img'])
 
 # # Define the metrics and their averages
 # metrics = ['PSNR Normal', 'CRC', 'PSNR Image', 'SSIM Image']
