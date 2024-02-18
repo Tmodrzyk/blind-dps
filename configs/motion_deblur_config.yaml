@@ -1,20 +1,18 @@
-kernel: gaussian
-kernel_size: 64
-intensity: 0.01
-
 conditioning:
-  method: ps
+  method: mlem
   params:
     scale: 0.3
 
 data:
   name: ffhq
-  root: ./data/ellipse_samples/
+  root: ./data/samples/
 
 measurement:
   operator:
-    name: blind_blur
+    name: motion_blur
+    kernel_size: 61
+    intensity: 0.5
 
   noise: 
     name: gaussian
-    sigma: 0.02
+    sigma: 0.05

@@ -36,57 +36,46 @@ class BlindConditioningMethod(ConditioningMethod):
         Handle multiple score models.
         Yet, support only gaussian noise measurement.
         '''
-        assert isinstance(operator, BlindBlurOperator) or isinstance(operator, TurbulenceOperator) or isinstance(operator, GaussialBlurOperator)
+        # assert isinstance(operator, BlindBlurOperator) or isinstance(operator, TurbulenceOperator) or isinstance(operator, GaussialBlurOperator)
         self.operator = operator
         self.noiser = noiser
     
     def project(self, data, kernel, noisy_measuerment, **kwargs):
         return self.operator.project(data=data, kernel=kernel, measurement=noisy_measuerment, **kwargs)
 
-    def grad_and_value(self, 
-                       x_0_hat: Dict[str, torch.Tensor], 
-                       x_0_hat_prev: Dict[str, torch.Tensor],
-                       measurement: torch.Tensor,
-                       **kwargs):
+    def grad_and_value(self, x_prev, x_0_hat, measurement, **kwargs):
+        if self.noiser.__name__ == 'gaussian':
+            difference = measurement - self.operator.forward(x_0_hat, **kwargs)
+            norm = torch.linalg.norm(difference)
+            norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
+        
+        elif self.noiser.__name__ == 'poisson':
+            Ax = self.operator.forward(x_0_hat, **kwargs)
+            difference = measurement-Ax
+            norm = torch.linalg.norm(difference) / measurement.abs()
+            norm = norm.mean()
+            norm_grad = torch.autograd.grad(outputs=norm, inputs=x_prev)[0]
 
-        if self.noiser.__name__ == 'gaussian' or self.noiser.__name__ == 'poisson' or self.noiser is None:  # why none?
-            
-            keys = sorted(x_0_hat_prev.keys())
-            idx = kwargs.get('idx', None)
-            
-            with torch.autograd.set_detect_anomaly(True):
-                x_0_hat_prev_values = [x[1] for x in sorted(x_0_hat_prev.items())]
-                x_0_hat_values = [x[1] for x in sorted(x_0_hat.items())]
-                difference = measurement - self.operator.forward(*x_0_hat_values)
-                norm = torch.linalg.norm(difference)
-                norm_squared = norm
-                norm_grad = torch.autograd.grad(outputs=norm_squared, inputs=x_0_hat_prev_values)
-                
-                # if(idx is not None):
-                #     save_dir = './results/debug/blind_blur/progress_grad/img/'
-                #     os.makedirs(save_dir, exist_ok=True)
-                    
-                #     image = self.operator.forward(*x_0_hat_values)
-                #     plt.imshow(clear_color(image))
-                #     plt.colorbar()
-                #     plt.savefig(os.path.join(save_dir, f'y_hat_{idx}.png'))
-                #     plt.close()
-                    
-                #     save_dir = './results/debug/blind_blur/progress_grad/kernel/'
-                #     os.makedirs(save_dir, exist_ok=True)
-                    
-                #     plt.imshow(norm_grad[0][0, 0, :, :].detach().cpu().numpy())
-                #     plt.colorbar()
-                #     plt.savefig(os.path.join(save_dir, f'grad_img_{idx}.png'))
-                #     plt.close()
-                    
         else:
             raise NotImplementedError
-        
-        return dict(zip(keys, norm_grad)), norm
+             
+        return norm_grad, norm
+
+@register_conditioning_method(name='diffusion-posterior')
+class DiffusionPosterior(BlindConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        assert kwargs.get('scale') is not None
+        self.scale = kwargs.get('scale')
+
+    def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
+        norm_grad, norm = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, **kwargs)
+        x_t -= norm_grad * self.scale
+        return x_t, norm
+
 
 @register_conditioning_method(name='gd')
-class PosteriorSampling(BlindConditioningMethod):
+class GradientDescent(BlindConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
         assert kwargs.get('scale') is not None
@@ -112,7 +101,7 @@ class PosteriorSampling(BlindConditioningMethod):
         return x_0_hat, norm
 
 @register_conditioning_method(name='adam')
-class PosteriorSampling(BlindConditioningMethod):
+class Adam(BlindConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
         assert kwargs.get('scale') is not None
@@ -137,7 +126,7 @@ class PosteriorSampling(BlindConditioningMethod):
         
         return x_0_hat, norm
     
-@register_conditioning_method(name='mlem')
+@register_conditioning_method(name='richardson-lucy')
 class MLEM(BlindConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)

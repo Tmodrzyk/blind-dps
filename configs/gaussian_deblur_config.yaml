@@ -1,5 +1,5 @@
 conditioning:
-  method: mlem
+  method: richardson-lucy
   params:
     scale: 0.3
     # scale: 0.3
@@ -8,18 +8,11 @@ data:
   name: ffhq
   root: ./data/samples/
 
-intensity: 0
-kernel_size: 65
-kernel_std: 3.0
-kernel: gaussian
-# kernel_std: [[9, 0], [0, 9]]
-
-
 measurement:
   noise:
     name: gaussian
     sigma: 0.02
   operator:
     name: gaussian_blur
-    kernel_size: 65
+    kernel_size: 61
     intensity: 3.0

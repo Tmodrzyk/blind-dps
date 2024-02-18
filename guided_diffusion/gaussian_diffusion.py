@@ -14,6 +14,7 @@ import numpy as np
 import os
 from util.img_utils import Blurkernel, clear_color
 from guided_diffusion.measurements import BlindBlurOperator, TurbulenceOperator
+from guided_diffusion.blind_condition_methods import get_conditioning_method
 
 
 __SAMPLER__ = {}
@@ -415,12 +416,12 @@ class DDIM(SpacedDiffusion):
 
 @register_sampler(name='blind_dps')
 class BlindDPS(DDPM):
-    import matplotlib.pyplot as plt
     def p_sample_loop(self, 
                       model: dict,
                       x_start: dict,
                       measurement,
                       measurement_cond_fn,
+                      measurement_cond_fn_refinement,
                       record,
                       save_root, 
                       gt):
@@ -432,88 +433,133 @@ class BlindDPS(DDPM):
         device = list(x_prev.values())[0].device 
         batch_size = list(x_prev.values())[0].shape[0]
         
-        pbar = tqdm(list(range(self.num_timesteps))[::-1])
+        pbar = tqdm(list(range(self.num_timesteps - 10, self.num_timesteps))[::-1])
+        # pbar = tqdm(list(range(self.num_timesteps))[::-1])
         
         norm_array = []  # Array to store the norm values
         
         x_0_hat = dict()
         x_0_hat['img'] = x_start['img']
-        
         x_0_hat['kernel'] = x_start['kernel']
         
-        time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
-        # x_t = dict()
-        # x_t['img'] = self.q_sample(x_0_hat['img'], t=time)
-        # x_t['img'] = self.p_sample(x=x_t['img'], t=time, model=model['img'])['sample']
+        measurement_norm = (measurement - measurement.min()) / (measurement.max() - measurement.min())
         
-        for idx in pbar:
+        x_prev['img'] = self.q_sample(x_0_hat['img'], t=torch.tensor([self.num_timesteps-1] * batch_size, device=device))
+        
+        with torch.no_grad():
             
-            steps = idx
+            # Deconvolution / Diffusion
+            
+            for idx in pbar:
+                steps = 20
+                        
+                # Normalize between 0 and 1 for Richardson-Lucy deconvolution
+                x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+                    
+                updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
+                                        measurement=measurement_norm,
+                                        steps=steps)
                 
-            updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
-                                    measurement=measurement,
-                                    steps=steps)
-            
-            x_0_hat['img'] = updated['img']
+                x_0_hat['img'] = updated['img']
+                x_0_hat_RL = x_0_hat['img']
 
-            save_dir = os.path.join(save_root, 'progress_RL/img/')
-            if not os.path.isdir(save_dir): 
-                os.makedirs(save_dir, exist_ok=True)
-            file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-            plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy().swapaxes(0, 2).swapaxes(0, 1))
-            plt.close()
-
-            
-            with torch.no_grad():
                 time = torch.tensor([idx] * batch_size, device=device)
-                # time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
-                # time = torch.randint(low=1, high=self.num_timesteps-1, size=(batch_size,), device=device)
+                
+                # Normalize between -1 and 1 for the diffusion model 
+                x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+                x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
+                
                 
                 x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
+                mean, var, logvar = self.q_posterior_mean_variance(x_0_hat['img'], x_prev['img'], t=time)
                 
-                # posterior_mean, posterior_variance, _ = self.q_posterior_mean_variance(x_t['img'], x_0_hat['img'], t=time)
-                # x_prev['img'] = posterior_mean + torch.sqrt(posterior_variance) * torch.randn_like(posterior_mean)
-
-                # diffusion prior cases 
+                x_prev['img'] = mean + var * torch.randn_like(mean)
                 output = dict() 
                 
                 output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
                 x_prev['img'] = output['img']['sample']
 
                 x_0_hat['img'] = output['img']['pred_xstart']
-                x_0_hat['img'] = torch.clamp(x_0_hat['img'], 0)
 
                 diff = (gt - x_0_hat['img'])**2
                 norm = diff.mean()
                 norm_array.append(norm.item())  # Append the norm value to the array
-                pbar.set_postfix({'norm': norm.item()}, refresh=True)
-
-
-
-            if record:
-                if idx % 1 == 0:
-                    save_dir = os.path.join(save_root, 'progress_x_0_hat/img/')
-                    if not os.path.isdir(save_dir): 
-                        os.makedirs(save_dir, exist_ok=True)
-                    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, x_0_hat['img'].squeeze().cpu().detach().numpy().swapaxes(0, 2).swapaxes(0, 1))
-                    plt.close()
+                
+                if record:
+                    if idx % 1 == 0:
+                        save_dir = os.path.join(save_root, 'progress_x_0_hat/img/')
+                        if not os.path.isdir(save_dir): 
+                            os.makedirs(save_dir, exist_ok=True)
+                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                        plt.imsave(file_path, clear_color(x_0_hat['img']))
+                        plt.close()
+                            
+                        save_dir = os.path.join(save_root, 'progress_x_t/img/')
+                        if not os.path.isdir(save_dir):
+                            os.makedirs(save_dir, exist_ok=True)
+                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                        plt.imsave(file_path, clear_color(x_prev['img']))
+                        plt.close()
                         
-                    save_dir = os.path.join(save_root, 'progress_x_t/img/')
-                    if not os.path.isdir(save_dir):
-                        os.makedirs(save_dir, exist_ok=True)
-                    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, clear_color(x_prev['img']))
-                    plt.close()
-                    
-                    save_dir = os.path.join(save_root, 'progress_diff/img/')
-                    if not os.path.isdir(save_dir):
-                        os.makedirs(save_dir, exist_ok=True)
-                    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                    plt.imsave(file_path, clear_color(diff))
-                    plt.close()
+                        save_dir = os.path.join(save_root, 'progress_diff/img/')
+                        if not os.path.isdir(save_dir):
+                            os.makedirs(save_dir, exist_ok=True)
+                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                        plt.imsave(file_path, clear_color(diff))
+                        plt.close()
+                        
+                        save_dir = os.path.join(save_root, 'progress_RL/img/')
+                        if not os.path.isdir(save_dir): 
+                            os.makedirs(save_dir, exist_ok=True)
+                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+                        plt.imsave(file_path, clear_color(x_0_hat_RL))
+                        plt.close()
+            
+            # Refinement with unconditional diffusion 
+            
+            # pbar = tqdm(list(range(self.num_timesteps - 10))[::-1])
+            # time = torch.tensor([self.num_timesteps - 11] * batch_size, device=device)
+            # x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+            # x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
+            # x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
+            
+            
+            # for idx in pbar: 
+            #     time = torch.tensor([idx] * batch_size, device=device)
+            #     x_prev['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])['sample']
+            #     if record:
+            #         if idx % 1 == 0:
+                            
+            #             save_dir = os.path.join(save_root, 'progress_x_t/img/')
+            #             if not os.path.isdir(save_dir):
+            #                 os.makedirs(save_dir, exist_ok=True)
+            #             file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+            #             plt.imsave(file_path, clear_color(x_prev['img']))
+            #             plt.close()
+                            
+            # x_0_hat['img'] = x_prev['img']
+            
+            # Refinement with diffusion posterior conditioning
+            
+        pbar = tqdm(list(range(self.num_timesteps - 10))[::-1])
         
-        return x_0_hat, norm_array
+        for idx in pbar:
+            time = torch.tensor([idx] * batch_size, device=device)
+
+            x_prev['img'] = x_prev['img'].requires_grad_()
+            out = self.p_sample(x=x_prev['img'], t=time, model=model['img'])
+            # Give condition.
+            noisy_measurement = self.q_sample(measurement, t=time)
+
+            # TODO: how can we handle argument for different condition method?
+            x_prev['img'], distance = measurement_cond_fn_refinement(x_t=out['sample'],
+                                    measurement=measurement,
+                                    noisy_measurement=noisy_measurement,
+                                    x_prev=x_prev['img'],
+                                    x_0_hat=out['pred_xstart'])
+            x_prev['img'] = x_prev['img'].detach_()
+            
+        return x_prev, norm_array
     
 # =================
 # Helper functions
@@ -546,7 +592,7 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         
         beta_start = 0.0001
         beta_end = 0.002
-
+        
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
         )
