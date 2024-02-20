@@ -451,7 +451,7 @@ class BlindDPS(DDPM):
             # Deconvolution / Diffusion
             
             for idx in pbar:
-                steps = 20
+                steps = 10
                         
                 # Normalize between 0 and 1 for Richardson-Lucy deconvolution
                 x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())

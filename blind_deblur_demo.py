@@ -153,7 +153,6 @@ def main():
         # y = operator.forward(ref_img, kernel)
         y = operator.forward(ref_img)
         y_n = noiser(y)
-        # y_n = torch.clamp(y_n, 0)
         
         x_start = {'img': y_n,
                 'kernel': kernel}

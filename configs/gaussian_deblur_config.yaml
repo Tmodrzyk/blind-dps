@@ -11,7 +11,7 @@ data:
 measurement:
   noise:
     name: gaussian
-    sigma: 0.02
+    sigma: 0.05
   operator:
     name: gaussian_blur
     kernel_size: 61
