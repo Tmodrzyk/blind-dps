@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -l walltime=10:00:00
+#PBS -N rldiffusion_ffhq
+#PBS -l nodes=1:ppn=8:gpus=1
+#PBS -q gpu
+#PBS -l mem=64gb
+#PBS -o rldiffusion_ffhq_stdout.txt
+#PBS -e rldiffusion_ffhq_stdout.txt
+#PBS -m ae
+#PBS -M thibaut.modrzyk@creatis.insa-lyon.fr
+
+set -e
+  
+cd "${PBS_O_WORKDIR}"
+hostname
+conda env create -f BlindDPS_simple.yaml --quiet || conda env update -f BlindDPS_simple.yaml --quiet
+eval "$(conda shell.bash hook)"
+conda activate BlindDPS_simple
+./run_deblur.sh

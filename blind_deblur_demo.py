@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/ffhq/hybrid4/')
+    parser.add_argument('--save_dir', type=str, default='./results/ffhq/val/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -169,9 +169,8 @@ def main():
         sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path, gt=ref_img)
 
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
-        plt.imsave(os.path.join(out_path, 'label', 'ker_'+fname), clear_color(kernel))
-        plt.imsave(os.path.join(out_path, 'label', 'img_'+fname), clear_color(ref_img))
-        plt.imsave(os.path.join(out_path, 'recon', 'img_'+fname), clear_color(sample['img']))
+        plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
+        plt.imsave(os.path.join(out_path, 'recon', fname), clear_color(sample['img']))
         
         plt.imshow((sample['img'] - ref_img).squeeze().detach().cpu().numpy().swapaxes(0, 2).swapaxes(0, 1))
         plt.colorbar()
@@ -189,5 +188,6 @@ def main():
         # plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
         # plt.close()
 
+        
 if __name__ == '__main__':
     main()

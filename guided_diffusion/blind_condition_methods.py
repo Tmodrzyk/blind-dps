@@ -67,7 +67,8 @@ class DiffusionPosterior(BlindConditioningMethod):
         super().__init__(operator, noiser)
         assert kwargs.get('scale') is not None
         self.scale = kwargs.get('scale')
-
+        self.scale = 0.3
+        
     def conditioning(self, x_prev, x_t, x_0_hat, measurement, **kwargs):
         norm_grad, norm = self.grad_and_value(x_prev=x_prev, x_0_hat=x_0_hat, measurement=measurement, **kwargs)
         x_t -= norm_grad * self.scale

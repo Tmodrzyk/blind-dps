@@ -433,7 +433,7 @@ class BlindDPS(DDPM):
         device = list(x_prev.values())[0].device 
         batch_size = list(x_prev.values())[0].shape[0]
         
-        pbar = tqdm(list(range(self.num_timesteps - 10, self.num_timesteps))[::-1])
+        pbar = tqdm(list(range(self.num_timesteps - 20, self.num_timesteps))[::-1])
         # pbar = tqdm(list(range(self.num_timesteps))[::-1])
         
         norm_array = []  # Array to store the norm values
@@ -515,10 +515,10 @@ class BlindDPS(DDPM):
                         plt.imsave(file_path, clear_color(x_0_hat_RL))
                         plt.close()
             
-            # Refinement with unconditional diffusion 
+            # # Refinement with unconditional diffusion 
             
-            # pbar = tqdm(list(range(self.num_timesteps - 10))[::-1])
-            # time = torch.tensor([self.num_timesteps - 11] * batch_size, device=device)
+            # pbar = tqdm(list(range(self.num_timesteps - 20))[::-1])
+            # time = torch.tensor([self.num_timesteps - 21] * batch_size, device=device)
             # x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
             # x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
             # x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
@@ -539,9 +539,24 @@ class BlindDPS(DDPM):
                             
             # x_0_hat['img'] = x_prev['img']
             
-            # Refinement with diffusion posterior conditioning
+        # RL 
+        
+        # Normalize between 0 and 1 for Richardson-Lucy deconvolution
+        # steps = 500
+        
+        # x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
             
-        pbar = tqdm(list(range(self.num_timesteps - 10))[::-1])
+        # updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
+        #                         measurement=measurement_norm,
+        #                         steps=steps)
+        
+        # x_0_hat['img'] = updated['img']
+        
+        # x_prev['img'] = self.q_sample(x_0_hat['img'], t=torch.tensor([self.num_timesteps-1] * batch_size, device=device))
+        
+        # Refinement with diffusion posterior conditioning
+            
+        pbar = tqdm(list(range(self.num_timesteps - 20))[::-1])
         
         for idx in pbar:
             time = torch.tensor([idx] * batch_size, device=device)
@@ -551,12 +566,12 @@ class BlindDPS(DDPM):
             # Give condition.
             noisy_measurement = self.q_sample(measurement, t=time)
 
-            # TODO: how can we handle argument for different condition method?
             x_prev['img'], distance = measurement_cond_fn_refinement(x_t=out['sample'],
                                     measurement=measurement,
                                     noisy_measurement=noisy_measurement,
                                     x_prev=x_prev['img'],
                                     x_0_hat=out['pred_xstart'])
+            
             x_prev['img'] = x_prev['img'].detach_()
             
         return x_prev, norm_array
@@ -592,6 +607,8 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         
         beta_start = 0.0001
         beta_end = 0.002
+        # beta_end = 0.02
+        
         
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
