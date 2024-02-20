@@ -165,7 +165,7 @@ def main():
                 logger.info(f"{k} will use uniform prior.")
     
         # sample 
-        sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path, gt=ref_img)
+        sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path, gt=ref_img)
 
         plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
         plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
