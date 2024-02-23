@@ -446,74 +446,74 @@ class BlindDPS(DDPM):
         
         x_prev['img'] = self.q_sample(x_0_hat['img'], t=torch.tensor([self.num_timesteps-1] * batch_size, device=device))
         
-        with torch.no_grad():
+        # with torch.no_grad():
             
             # Deconvolution / Diffusion
             
-            for idx in pbar:
-                steps = 20
+            # for idx in pbar:
+            #     steps = 20
                         
-                # Normalize between 0 and 1 for Richardson-Lucy deconvolution
-                x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+            #     # Normalize between 0 and 1 for Richardson-Lucy deconvolution
+            #     x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
                     
-                updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
-                                        measurement=measurement_norm,
-                                        steps=steps)
+            #     updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
+            #                             measurement=measurement_norm,
+            #                             steps=steps)
                 
-                x_0_hat['img'] = updated['img']
-                x_0_hat_RL = x_0_hat['img']
+            #     x_0_hat['img'] = updated['img']
+            #     x_0_hat_RL = x_0_hat['img']
 
-                time = torch.tensor([idx] * batch_size, device=device)
+            #     time = torch.tensor([idx] * batch_size, device=device)
                 
-                # Normalize between -1 and 1 for the diffusion model 
-                x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
-                x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
+            #     # Normalize between -1 and 1 for the diffusion model 
+            #     x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+            #     x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
                 
                 
-                x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
-                mean, var, logvar = self.q_posterior_mean_variance(x_0_hat['img'], x_prev['img'], t=time)
+            #     x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
+            #     mean, var, logvar = self.q_posterior_mean_variance(x_0_hat['img'], x_prev['img'], t=time)
                 
-                x_prev['img'] = mean + var * torch.randn_like(mean)
-                output = dict() 
+            #     x_prev['img'] = mean + var * torch.randn_like(mean)
+            #     output = dict() 
                 
-                output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
-                x_prev['img'] = output['img']['sample']
+            #     output['img'] = self.p_sample(x=x_prev['img'], t=time, model=model['img'])  
+            #     x_prev['img'] = output['img']['sample']
 
-                x_0_hat['img'] = output['img']['pred_xstart']
+            #     x_0_hat['img'] = output['img']['pred_xstart']
 
-                diff = (gt - x_0_hat['img'])**2
-                norm = diff.mean()
-                norm_array.append(norm.item())  # Append the norm value to the array
+            #     diff = (gt - x_0_hat['img'])**2
+            #     norm = diff.mean()
+            #     norm_array.append(norm.item())  # Append the norm value to the array
                 
-                if record:
-                    if idx % 1 == 0:
-                        save_dir = os.path.join(save_root, 'progress_x_0_hat/img/')
-                        if not os.path.isdir(save_dir): 
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(x_0_hat['img']))
-                        plt.close()
+            #     if record:
+            #         if idx % 1 == 0:
+            #             save_dir = os.path.join(save_root, 'progress_x_0_hat/img/')
+            #             if not os.path.isdir(save_dir): 
+            #                 os.makedirs(save_dir, exist_ok=True)
+            #             file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+            #             plt.imsave(file_path, clear_color(x_0_hat['img']))
+            #             plt.close()
                             
-                        save_dir = os.path.join(save_root, 'progress_x_t/img/')
-                        if not os.path.isdir(save_dir):
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(x_prev['img']))
-                        plt.close()
+            #             save_dir = os.path.join(save_root, 'progress_x_t/img/')
+            #             if not os.path.isdir(save_dir):
+            #                 os.makedirs(save_dir, exist_ok=True)
+            #             file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+            #             plt.imsave(file_path, clear_color(x_prev['img']))
+            #             plt.close()
                         
-                        save_dir = os.path.join(save_root, 'progress_diff/img/')
-                        if not os.path.isdir(save_dir):
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(diff))
-                        plt.close()
+            #             save_dir = os.path.join(save_root, 'progress_diff/img/')
+            #             if not os.path.isdir(save_dir):
+            #                 os.makedirs(save_dir, exist_ok=True)
+            #             file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+            #             plt.imsave(file_path, clear_color(diff))
+            #             plt.close()
                         
-                        save_dir = os.path.join(save_root, 'progress_RL/img/')
-                        if not os.path.isdir(save_dir): 
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(x_0_hat_RL))
-                        plt.close()
+            #             save_dir = os.path.join(save_root, 'progress_RL/img/')
+            #             if not os.path.isdir(save_dir): 
+            #                 os.makedirs(save_dir, exist_ok=True)
+            #             file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+            #             plt.imsave(file_path, clear_color(x_0_hat_RL))
+            #             plt.close()
             
             # # Refinement with unconditional diffusion 
             
@@ -542,17 +542,22 @@ class BlindDPS(DDPM):
         # RL 
         
         # Normalize between 0 and 1 for Richardson-Lucy deconvolution
-        # steps = 500
+        # steps = 25
         
         # x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+        # plt.close()
             
         # updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
         #                         measurement=measurement_norm,
         #                         steps=steps)
         
+        plt.imsave(os.path.join(save_root, 'recon', 'intermediate.png'), clear_color(x_0_hat['img']))
         # x_0_hat['img'] = updated['img']
         
+        # plt.imshow(clear_color(x_0_hat['img']))
+        # plt.show()
         # x_prev['img'] = self.q_sample(x_0_hat['img'], t=torch.tensor([self.num_timesteps-1] * batch_size, device=device))
+        
         
         # Refinement with diffusion posterior conditioning
             

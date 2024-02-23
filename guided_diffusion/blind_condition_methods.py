@@ -13,6 +13,7 @@ from scipy.signal import convolve
 import numpy as np
 
 import torch.nn.functional as F
+from skimage.restoration import denoise_tv_chambolle
 
 __CONDITIONING_METHOD__ = {}
 
@@ -128,7 +129,7 @@ class Adam(BlindConditioningMethod):
         return x_0_hat, norm
     
 @register_conditioning_method(name='richardson-lucy')
-class MLEM(BlindConditioningMethod):
+class RL(BlindConditioningMethod):
     def __init__(self, operator, noiser, **kwargs):
         super().__init__(operator, noiser)
         assert kwargs.get('scale') is not None
@@ -164,6 +165,51 @@ class MLEM(BlindConditioningMethod):
         # plt.imshow(x_0_hat['img'].squeeze().detach().cpu().numpy().swapaxes(0, 1).swapaxes(1, 2))
         # plt.show()
         return x_0_hat, 0
+    
+    def conditioning(self, x_0_hat, measurement, steps, **kwargs):
+        
+        x_0_hat, norm = self.mlem(observation=measurement, x_0_hat=x_0_hat, steps=steps, clip=True, filter_epsilon=1e-6, device='cuda', **kwargs)
+
+        return x_0_hat, norm
+
+@register_conditioning_method(name='richardson-lucy-tv')
+class RLTV(BlindConditioningMethod):
+    def __init__(self, operator, noiser, **kwargs):
+        super().__init__(operator, noiser)
+        assert kwargs.get('scale') is not None
+        self.scale = kwargs.get('scale')
+        np.random.seed(123)
+    
+    def mlem(self, observation, x_0_hat, steps, clip, filter_epsilon, device, **kwargs):
+        with torch.no_grad():
+            img = x_0_hat['img']
+            kernel = x_0_hat['kernel'].repeat(1,3,1,1)
+            # kernel = x_0_hat['kernel']
+            
+            image = observation.to(torch.float32).clone().to(device)
+            psf = kernel.to(torch.float32).clone().to(device)
+            im_deconv = img.to(torch.float32).clone().to(device)
+            psf_mirror = torch.flip(psf, dims=[0, 1])
+
+            # Small regularization parameter used to avoid 0 divisions
+            eps = 1e-12
+            pad = (psf.size(2) // 2, psf.size(2) // 2, psf.size(3) // 2, psf.size(3) // 2)
+            for _ in range(steps):
+                conv = F.conv2d(F.pad(im_deconv, pad, mode='replicate'), psf) + eps
+                if filter_epsilon:
+                    relative_blur = torch.where(conv < filter_epsilon, torch.tensor(0.0, device=device), image / conv)
+                else:
+                    relative_blur = image / conv
+                im_deconv *= F.conv2d(F.pad(relative_blur, pad, mode='replicate'), psf_mirror)
+
+                im_deconv = torch.from_numpy(denoise_tv_chambolle(im_deconv.cpu().numpy(), weight=0.005, max_num_iter=50, channel_axis=1)).to(device)
+                
+            if clip:
+                im_deconv = torch.clamp(im_deconv, -1, 1)
+
+            x_0_hat['img'] = im_deconv.to(device)
+        
+            return x_0_hat, 0
     
     def conditioning(self, x_0_hat, measurement, steps, **kwargs):
         

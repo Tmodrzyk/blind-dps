@@ -1,4 +1,4 @@
-from functools import partial
+
 import os
 import argparse
 import yaml
@@ -8,9 +8,6 @@ import torch
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
-from guided_diffusion.blind_condition_methods import get_conditioning_method
-from guided_diffusion.measurements import get_operator, get_noise
-
 # Here replaces the regular unet by our trained unet
 # from guided_diffusion.unet import create_model
 import guided_diffusion.diffusion_model_unet 
@@ -18,10 +15,20 @@ import guided_diffusion.unet
 
 from guided_diffusion.gaussian_diffusion import create_sampler
 from data.dataloader import get_dataset, get_dataloader
-from motionblur.motionblur import Kernel
-from util.img_utils import Blurkernel, clear_color
-from util.logger import get_logger
+from guided_diffusion.blind_condition_methods import get_conditioning_method
+from guided_diffusion.measurements import get_operator, get_noise
 
+from motionblur.motionblur import Kernel
+from util.img_utils import Blurkernel, clear_color, normalize_np
+from util.logger import get_logger
+from functools import partial
+
+import scico.numpy as snp
+from scico import functional, linop, loss, metric, plot, random
+from scico.optimize.admm import ADMM, LinearSubproblemSolver
+from scico.util import device_info
+
+import jax
 
 def load_yaml(file_path: str) -> dict:
     with open(file_path) as f:
@@ -39,7 +46,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/ffhq/ablation/rl-diffusion-dps-refinement/')
+    parser.add_argument('--save_dir', type=str, default='./results/ffhq/ablation/pnp-admm-dps-refinement/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -134,6 +141,19 @@ def main():
     torch.manual_seed(123)
     torch.backends.cudnn.deterministic = True  # if using CUDA
     
+    
+    if args.kernel == 'motion_blur':
+        kernel = Kernel(size=(args.kernel_size, args.kernel_size), intensity=args.intensity).kernelMatrix
+        kernel = torch.from_numpy(kernel).type(torch.float32)
+        kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
+    elif args.kernel == 'gaussian_blur':
+        conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.intensity, device=device)
+        kernel = conv.get_kernel().type(torch.float32)
+        kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
+                
+    psf = snp.array(kernel.squeeze().unsqueeze(2).cpu().numpy())  # convert to jax array
+    A = linop.Convolve(h=psf, input_shape=(256, 256, 3))
+    
     # Do Inference
     for i, ref_img in enumerate(loader):
         if(i==20):
@@ -141,21 +161,51 @@ def main():
             fname = str(i).zfill(5) + '.png'
             ref_img = ref_img.to(device)
 
-            if args.kernel == 'motion_blur':
-                kernel = Kernel(size=(args.kernel_size, args.kernel_size), intensity=args.intensity).kernelMatrix
-                kernel = torch.from_numpy(kernel).type(torch.float32)
-                kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
-            elif args.kernel == 'gaussian_blur':
-                conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.intensity, device=device)
-                kernel = conv.get_kernel().type(torch.float32)
-                kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
             
             # Forward measurement model (Ax + n)
             # y = operator.forward(ref_img, kernel)
             y = operator.forward(ref_img)
             y_n = noiser(y)
             
-            x_start = {'img': y_n,
+            x_gt = snp.array(ref_img.cpu().numpy().squeeze().swapaxes(0, 1).swapaxes(1, 2))  # convert to jax array
+
+        
+            sigma = 0.05  # noise level
+            
+            Ax = A(x_gt)  # blurred image
+            
+            noise, key = random.randn(Ax.shape)
+            y = Ax + sigma * noise
+            
+            f = loss.SquaredL2Loss(y=y, A=A)
+            g = functional.DnCNN("17M")
+            C = linop.Identity(x_gt.shape)
+
+            rho = 0.2  # ADMM penalty parameter
+            maxiter = 12  # number of ADMM iterations
+
+            solver = ADMM(
+                f=f,
+                g_list=[g],
+                C_list=[C],
+                rho_list=[rho],
+                x0=A.T @ y,
+                maxiter=maxiter,
+                subproblem_solver=LinearSubproblemSolver(cg_kwargs={"tol": 1e-3, "maxiter": 30}),
+                itstat_options={"display": True},
+            )
+
+            nc = 61 // 2
+            y = snp.clip(y[nc:-nc, nc:-nc], 0, 1)
+            
+            x = solver.solve()
+            x = snp.clip(x, 0, 1)
+    
+            x = np.array(x)
+            x = torch.from_numpy(x).to(device)
+            x = x.permute(2, 0, 1).unsqueeze(0)
+            
+            x_start = {'img': x,
                     'kernel': kernel}
 
             # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
