@@ -128,7 +128,7 @@ def main():
     transform = transforms.Compose([transforms.ToTensor(),
                                     # transforms.Grayscale(num_output_channels=3),
                                     transforms.Resize((256, 256)),
-                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                                     # Careful with the normalization, it caused the reconstruction to fail
                                     # transforms.Normalize(0.5, 0.5)
                                     
@@ -156,83 +156,81 @@ def main():
     
     # Do Inference
     for i, ref_img in enumerate(loader):
-        if(i==20):
-            logger.info(f"Inference for image {i}")
-            fname = str(i).zfill(5) + '.png'
-            ref_img = ref_img.to(device)
-
-            
-            # Forward measurement model (Ax + n)
-            # y = operator.forward(ref_img, kernel)
-            y = operator.forward(ref_img)
-            y_n = noiser(y)
-            
-            x_gt = snp.array(ref_img.cpu().numpy().squeeze().swapaxes(0, 1).swapaxes(1, 2))  # convert to jax array
+        logger.info(f"Inference for image {i}")
+        fname = str(i).zfill(5) + '.png'
+        ref_img = ref_img.to(device)
 
         
-            sigma = 0.05  # noise level
-            
-            Ax = A(x_gt)  # blurred image
-            
-            noise, key = random.randn(Ax.shape)
-            y = Ax + sigma * noise
-            
-            f = loss.SquaredL2Loss(y=y, A=A)
-            g = functional.DnCNN("17M")
-            C = linop.Identity(x_gt.shape)
+        # Forward measurement model (Ax + n)
+        # y = operator.forward(ref_img, kernel)
+        y = operator.forward(ref_img)
+        y_n = noiser(y)
+        
+        x_gt = snp.array(ref_img.cpu().numpy().squeeze().swapaxes(0, 1).swapaxes(1, 2))  # convert to jax array
 
-            rho = 0.2  # ADMM penalty parameter
-            maxiter = 12  # number of ADMM iterations
-
-            solver = ADMM(
-                f=f,
-                g_list=[g],
-                C_list=[C],
-                rho_list=[rho],
-                x0=A.T @ y,
-                maxiter=maxiter,
-                subproblem_solver=LinearSubproblemSolver(cg_kwargs={"tol": 1e-3, "maxiter": 30}),
-                itstat_options={"display": True},
-            )
-
-            nc = 61 // 2
-            y = snp.clip(y[nc:-nc, nc:-nc], 0, 1)
-            
-            x = solver.solve()
-            x = snp.clip(x, 0, 1)
     
-            x = np.array(x)
-            x = torch.from_numpy(x).to(device)
-            x = x.permute(2, 0, 1).unsqueeze(0)
-            
-            x_start = {'img': x,
-                    'kernel': kernel}
-
-            # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
-            for k in x_start:
-                if k in model.keys():
-                    logger.info(f"{k} will use diffusion prior")
-                else:
-                    logger.info(f"{k} will use uniform prior.")
+        sigma = 0.05  # noise level
         
-            # sample 
-            sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path, gt=ref_img)
+        Ax = A(x_gt)  # blurred image
+        
+        noise, key = random.randn(Ax.shape)
+        y = Ax + sigma * noise
+        
+        f = loss.SquaredL2Loss(y=y, A=A)
+        g = functional.DnCNN("17M")
+        C = linop.Identity(x_gt.shape)
 
-            plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
-            plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
-            plt.imsave(os.path.join(out_path, 'recon', fname), clear_color(sample['img']))
+        rho = 0.2  # ADMM penalty parameter
+        maxiter = 12  # number of ADMM iterations
 
-            # plt.plot(range(sampler.num_timesteps), norms)
-            # plt.xlabel('Iteration Index')
-            # plt.ylabel('Norm')
-            # plt.ylim(bottom=0, top=max(norms))  # Set the Y-axis range
-            
-            # save_dir = os.path.join(out_path, f'progress_norm/')
-            # if not os.path.isdir(save_dir):
-            #     os.makedirs(save_dir, exist_ok=True)
-            # plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
-            # plt.close()
+        solver = ADMM(
+            f=f,
+            g_list=[g],
+            C_list=[C],
+            rho_list=[rho],
+            x0=A.T @ y,
+            maxiter=maxiter,
+            subproblem_solver=LinearSubproblemSolver(cg_kwargs={"tol": 1e-3, "maxiter": 30}),
+            itstat_options={"display": True},
+        )
 
+        nc = 61 // 2
+        y = snp.clip(y[nc:-nc, nc:-nc], 0, 1)
+
+        x = solver.solve()
+        x = snp.clip(x, 0, 1)
+
+        x = np.array(x)
+        x = torch.from_numpy(x).to(device)
+        x = x.permute(2, 0, 1).unsqueeze(0)
+        
+        x_start = {'img': x,
+                'kernel': kernel}
+
+        # !prior check: keys of model (line 74) must be the same as those of x_start to use diffusion prior.
+        for k in x_start:
+            if k in model.keys():
+                logger.info(f"{k} will use diffusion prior")
+            else:
+                logger.info(f"{k} will use uniform prior.")
+    
+        # sample 
+        sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path, gt=ref_img)
+
+        plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
+        plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
+        plt.imsave(os.path.join(out_path, 'recon', fname), clear_color(sample['img']))
+
+        # plt.plot(range(sampler.num_timesteps), norms)
+        # plt.xlabel('Iteration Index')
+        # plt.ylabel('Norm')
+        # plt.ylim(bottom=0, top=max(norms))  # Set the Y-axis range
+        
+        # save_dir = os.path.join(out_path, f'progress_norm/')
+        # if not os.path.isdir(save_dir):
+        #     os.makedirs(save_dir, exist_ok=True)
+        # plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
+        # plt.close()
         
 if __name__ == '__main__':
     main()

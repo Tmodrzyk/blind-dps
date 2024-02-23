@@ -560,7 +560,11 @@ class BlindDPS(DDPM):
         
         
         # Refinement with diffusion posterior conditioning
-            
+        
+        # Normalize between -1 and 1 for the diffusion model 
+        x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+        x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
+             
         pbar = tqdm(list(range(self.num_timesteps - 20))[::-1])
         
         for idx in pbar:
