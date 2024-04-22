@@ -445,6 +445,7 @@ class BlindDPS(DDPM):
         x_0_hat['kernel'] = x_start['kernel']
         
         measurement_norm = (measurement - measurement.min()) / (measurement.max() - measurement.min())
+        measurement = (measurement + 1) / 2.0
         measurement = measurement.clamp(0, 1)   
         
         x_prev['img'] = self.q_sample(x_0_hat['img'], t=torch.tensor([self.num_timesteps-1] * batch_size, device=device))
@@ -456,9 +457,7 @@ class BlindDPS(DDPM):
             for idx in pbar:
                 steps = idx // 10
                         
-                # Normalize between 0 and 1 for Richardson-Lucy deconvolution
-                # x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
-                # x_0_hat['img'] = (x_0_hat['img'] - measurement.min()) / (measurement.max() - measurement.min())
+                x_0_hat['img'] = (x_0_hat['img'] + 1) / 2.0
                 x_0_hat['img'] = x_0_hat['img'].clamp(0, 1)
                 updated, norm = measurement_cond_fn(x_0_hat=x_0_hat,
                                         measurement=measurement,
@@ -471,8 +470,8 @@ class BlindDPS(DDPM):
                 # time = torch.tensor([self.num_timesteps-1] * batch_size, device=device)
                 
                 # Normalize between -1 and 1 for the diffusion model 
-                # x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
-                # x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
+                x_0_hat['img'] = (x_0_hat['img'] - x_0_hat['img'].min()) / (x_0_hat['img'].max() - x_0_hat['img'].min())
+                x_0_hat['img'] = x_0_hat['img'] * 2.0 - 1.0
                 
                 x_prev['img'] = self.q_sample(x_0_hat['img'], t=time)
                 # mean, var, logvar = self.q_posterior_mean_variance(x_0_hat['img'], x_prev['img'], t=time)
@@ -523,10 +522,10 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         # Linear schedule from Ho et al, extended to work for any number of
         # diffusion steps.
         
-        # beta_start = 0.0001
-        # beta_end = 0.002
         beta_start = 0.0001
-        beta_end = 0.02
+        beta_end = 0.002
+        # beta_start = 0.0001
+        # beta_end = 0.02
         
         
         return np.linspace(

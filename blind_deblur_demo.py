@@ -136,7 +136,7 @@ def main():
             logger.info(f"Inference for image {i}")
             fname = str(i).zfill(5) + '.png'
             ref_img = ref_img.to(device)
-
+            
             if(ref_img.shape[1] == 1):
                 operator.conv = BlurkernelGrayscale('gaussian', kernel_size=args.kernel_size, std=args.intensity, device=device).to(device)
                 operator.kernel = operator.conv.get_kernel().type(torch.float32)
