@@ -46,10 +46,10 @@ def clear_color(x: torch.Tensor) -> np.ndarray:
         return normalize_np(np.transpose(x, (1,2,0)))
     elif x.shape[1] == 1:
         x = x.detach().cpu().squeeze().numpy()
-        return normalize_np(x)
+        return x
     elif x.shape[0] == 1:
         x = x.detach().cpu().squeeze().numpy()
-        return normalize_np(x)
+        return x
     else:
         raise NotImplementedError
      
@@ -316,9 +316,8 @@ class Blurkernel(nn.Module):
         self.std = std
         self.device = device
         self.seq = nn.Sequential(
-            # nn.Conv2d(1, 1, self.kernel_size, stride=1, padding=self.kernel_size//2, padding_mode='replicate', bias=False, groups=1)
-            nn.Conv2d(3, 3, self.kernel_size, stride=1, padding=self.kernel_size//2, padding_mode='replicate', bias=False, groups=3)
-            
+            nn.Conv2d(1, 1, self.kernel_size, stride=1, padding=self.kernel_size//2, padding_mode='replicate', bias=False, groups=1)
+            # nn.Conv2d(3, 3, self.kernel_size, stride=1, padding=self.kernel_size//2, padding_mode='replicate', bias=False, groups=3)
         )
 
         self.weights_init()

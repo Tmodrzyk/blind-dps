@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python3 pnp_admm_deblur.py \
+/home/modrzyk/miniconda3/envs/scico_test/bin/python pnp_admm_deblur.py \
     --img_model_config=configs/model_config.yaml \
     --kernel_model_config=configs/kernel_model_config.yaml \
     --diffusion_config=configs/diffusion_config_fast.yaml \
