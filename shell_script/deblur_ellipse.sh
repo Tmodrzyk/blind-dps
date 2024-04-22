@@ -5,5 +5,6 @@ python  blind_deblur_demo.py \
     --kernel_model_config=configs/kernel_model_config.yaml \
     --diffusion_config=configs/diffusion_config_fast.yaml \
     --task_config=configs/gaussian_deblur_config.yaml \
+    --save_dir='./results/ellipse/debug/' \
     --reg_ord=1 \
     --reg_scale=0.0;

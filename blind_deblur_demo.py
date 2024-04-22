@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/ffhq/debug/')
+    parser.add_argument('--save_dir', type=str, default='./results/debug/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
