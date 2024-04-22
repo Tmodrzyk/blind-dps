@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from motionblur.motionblur import Kernel
 from .fastmri_utils import fft2c_new, ifft2c_new
 from scipy.stats import multivariate_normal
-
+import os
 
 """
 Helper functions for new types of inverse problems
@@ -458,6 +458,35 @@ def total_variation_loss(img, weight):
     return weight * (tv_h + tv_w)
 
 
+def log_images(x_0_hat, x_prev, diff, x_0_hat_RL, idx, save_root):
+    save_dir = os.path.join(save_root, 'progress_x_0_hat/img/')
+    if not os.path.isdir(save_dir): 
+        os.makedirs(save_dir, exist_ok=True)
+    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+    plt.imsave(file_path, clear_color(x_0_hat))
+    plt.close()
+        
+    save_dir = os.path.join(save_root, 'progress_x_t/img/')
+    if not os.path.isdir(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+    plt.imsave(file_path, clear_color(x_prev))
+    plt.close()
+
+    save_dir = os.path.join(save_root, 'progress_diff/img/')
+    if not os.path.isdir(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+    plt.imsave(file_path, clear_color(diff))
+    plt.close()
+
+    save_dir = os.path.join(save_root, 'progress_RL/img/')
+    if not os.path.isdir(save_dir): 
+        os.makedirs(save_dir, exist_ok=True)
+    file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
+    plt.imsave(file_path, clear_color(x_0_hat_RL))
+    plt.close()
+                    
 if __name__ == '__main__':
     import numpy as np
     from torch import nn

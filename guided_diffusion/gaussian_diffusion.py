@@ -9,6 +9,8 @@ import torch.nn.functional as F
 from tqdm.auto import tqdm
 
 from util.img_utils import clear_color
+from util.img_utils import log_images
+
 from .posterior_mean_variance import get_mean_processor, get_var_processor
 import numpy as np
 import os
@@ -487,35 +489,8 @@ class BlindDPS(DDPM):
                 norm = diff.mean()
                 norm_array.append(norm.item())  # Append the norm value to the array
                 
-                if record:
-                    if idx % 1 == 0:
-                        save_dir = os.path.join(save_root, 'progress_x_0_hat/img/')
-                        if not os.path.isdir(save_dir): 
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(x_0_hat['img']))
-                        plt.close()
-                            
-                        save_dir = os.path.join(save_root, 'progress_x_t/img/')
-                        if not os.path.isdir(save_dir):
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(x_prev['img']))
-                        plt.close()
-                        
-                        save_dir = os.path.join(save_root, 'progress_diff/img/')
-                        if not os.path.isdir(save_dir):
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(diff))
-                        plt.close()
-                        
-                        save_dir = os.path.join(save_root, 'progress_RL/img/')
-                        if not os.path.isdir(save_dir): 
-                            os.makedirs(save_dir, exist_ok=True)
-                        file_path = os.path.join(save_dir, f"x_{str(idx).zfill(4)}.png")
-                        plt.imsave(file_path, clear_color(x_0_hat_RL))
-                        plt.close()
+                if record and idx % 1 == 0:
+                    log_images(x_0_hat['img'], x_prev['img'], diff, x_0_hat_RL, idx, save_root)
             
         return x_0_hat, norm_array
     
