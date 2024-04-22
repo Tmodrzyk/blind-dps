@@ -5,8 +5,8 @@ conditioning:
     # scale: 0.3
 
 data:
-  name: ellipse
-  root: /home/modrzyk/code/blind-dps/data/ellipse/
+  name: ffhq
+  root: /home/modrzyk/code/blind-dps/data/ffhq/
 
 measurement:
   noise:

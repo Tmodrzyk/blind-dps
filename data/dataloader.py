@@ -3,6 +3,7 @@ from PIL import Image
 from typing import Callable, Optional
 from torch.utils.data import DataLoader
 from torchvision.datasets import VisionDataset
+import torchvision.transforms 
 
 
 __DATASET__ = {}
@@ -38,6 +39,11 @@ class FFHQDataset(VisionDataset):
     def __init__(self, root: str, transforms: Optional[Callable]=None):
         super().__init__(root, transforms)
 
+        self.transforms = torchvision.transforms.Compose([torchvision.transforms.ToTensor(),
+                                            torchvision.transforms.Resize((256, 256)),
+                                            torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                                        ])
+        
         self.fpaths = sorted(glob(root + '/**/*.png', recursive=True))
         assert len(self.fpaths) > 0, "File list is empty. Check the root."
 
@@ -90,6 +96,9 @@ class EllipseDataset(VisionDataset):
     def __init__(self, root: str, transforms: Optional[Callable]=None):
         super().__init__(root, transforms)
 
+        self.transforms = torchvision.transforms.Compose([torchvision.transforms.ToTensor(),
+                                        ])
+        
         self.fpaths = sorted(glob(root + '/**/*.png', recursive=True))
         assert len(self.fpaths) > 0, "File list is empty. Check the root."
 

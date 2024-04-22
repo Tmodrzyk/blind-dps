@@ -67,8 +67,8 @@ def main():
     args.intensity = task_config["measurement"]["operator"]["intensity"]
     
     # Load model
-    img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
-    # img_model = guided_diffusion.unet.create_model(**img_model_config)
+    # img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
+    img_model = guided_diffusion.unet.create_model(**img_model_config)
     img_model = img_model.to(device)
     img_model.eval()
     
@@ -118,15 +118,7 @@ def main():
 
     # Prepare dataloader
     data_config = task_config['data']
-    transform = transforms.Compose([transforms.ToTensor(),
-                                    # transforms.Grayscale(num_output_channels=3),
-                                    # transforms.Resize((256, 256)),
-                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                                    # Careful with the normalization, it caused the reconstruction to fail
-                                    # transforms.Normalize(0.5, 0.5)
-                                    ])
-    
-    dataset = get_dataset(**data_config, transforms=transform)
+    dataset = get_dataset(**data_config)
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
     # set seed for reproduce
