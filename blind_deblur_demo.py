@@ -19,7 +19,7 @@ import guided_diffusion.unet
 from guided_diffusion.gaussian_diffusion import create_sampler
 from data.dataloader import get_dataset, get_dataloader
 from motionblur.motionblur import Kernel
-from util.img_utils import Blurkernel, clear_color
+from util.img_utils import Blurkernel, BlurkernelGrayscale, clear_color
 from util.logger import get_logger
 
 
@@ -65,10 +65,17 @@ def main():
     args.kernel = task_config["measurement"]["operator"]["name"]
     args.kernel_size = task_config["measurement"]["operator"]["kernel_size"]
     args.intensity = task_config["measurement"]["operator"]["intensity"]
-    
+
+    # Prepare dataloader
+    data_config = task_config['data']
+    dataset = get_dataset(**data_config)
+    loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
+        
     # Load model
-    # img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
-    img_model = guided_diffusion.unet.create_model(**img_model_config)
+    if(data_config['name'] == 'ellipse'):
+        img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
+    else:
+        img_model = guided_diffusion.unet.create_model(**img_model_config)
     img_model = img_model.to(device)
     img_model.eval()
     
@@ -116,10 +123,7 @@ def main():
     for img_dir in ['input', 'recon', 'progress', 'label']:
         os.makedirs(os.path.join(out_path, img_dir), exist_ok=True)
 
-    # Prepare dataloader
-    data_config = task_config['data']
-    dataset = get_dataset(**data_config)
-    loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
+
 
     # set seed for reproduce
     np.random.seed(123)
@@ -133,12 +137,21 @@ def main():
             fname = str(i).zfill(5) + '.png'
             ref_img = ref_img.to(device)
 
+            if(ref_img.shape[1] == 1):
+                operator.conv = BlurkernelGrayscale('gaussian', kernel_size=args.kernel_size, std=args.intensity, device=device).to(device)
+                operator.kernel = operator.conv.get_kernel().type(torch.float32)
+                operator.conv.update_weights(operator.kernel.type(torch.float32))
+                
             if args.kernel == 'motion_blur':
                 kernel = Kernel(size=(args.kernel_size, args.kernel_size), intensity=args.intensity).kernelMatrix
                 kernel = torch.from_numpy(kernel).type(torch.float32)
                 kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
+                
             elif args.kernel == 'gaussian_blur':
-                conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.intensity, device=device)
+                if(ref_img.shape[1] == 1):
+                    conv = BlurkernelGrayscale('gaussian', kernel_size=args.kernel_size, std=args.intensity, device=device)
+                else:
+                    conv = Blurkernel('gaussian', kernel_size=args.kernel_size, std=args.intensity, device=device)
                 kernel = conv.get_kernel().type(torch.float32)
                 kernel = kernel.to(device).view(1, 1, args.kernel_size, args.kernel_size)
             

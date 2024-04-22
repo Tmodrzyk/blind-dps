@@ -59,6 +59,32 @@ class FFHQDataset(VisionDataset):
         
         return img
 
+@register_dataset(name='ffhq-gray')
+class FFHQDataset(VisionDataset):
+    def __init__(self, root: str, transforms: Optional[Callable]=None):
+        super().__init__(root, transforms)
+
+        self.transforms = torchvision.transforms.Compose([torchvision.transforms.ToTensor(),
+                                            torchvision.transforms.Grayscale(num_output_channels=3),
+                                            torchvision.transforms.Resize((256, 256)),
+                                            torchvision.transforms.Normalize(0.5, 0.5),
+                                        ])
+        
+        self.fpaths = sorted(glob(root + '/**/*.png', recursive=True))
+        assert len(self.fpaths) > 0, "File list is empty. Check the root."
+
+    def __len__(self):
+        return len(self.fpaths)
+
+    def __getitem__(self, index: int):
+        fpath = self.fpaths[index]
+        img = Image.open(fpath).convert('RGB')
+        
+        if self.transforms is not None:
+            img = self.transforms(img)
+        
+        return img
+    
 @register_dataset(name='imagenet1k')
 class ImageNet1kDataset(FFHQDataset):
     def __init__(self, root: str, transforms: Optional[Callable] = None):

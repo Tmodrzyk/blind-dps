@@ -1,0 +1,18 @@
+conditioning:
+  method: richardson-lucy
+  params:
+    scale: 1.0
+    # scale: 0.3
+
+data:
+  name: ffhq-gray
+  root: /home/modrzyk/code/blind-dps/data/ffhq/
+
+measurement:
+  noise:
+    name: gaussian
+    sigma: 0.0
+  operator:
+    name: gaussian_blur
+    kernel_size: 61
+    intensity: 3.0
