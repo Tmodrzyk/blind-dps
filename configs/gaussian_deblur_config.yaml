@@ -5,13 +5,13 @@ conditioning:
     # scale: 0.3
 
 data:
-  name: ffhq
-  root: /home/modrzyk/code/data/ffhq-dataset/images1024x1024/00000/
+  name: ellipse
+  root: /home/modrzyk/code/blind-dps/data/ellipse/
 
 measurement:
   noise:
     name: gaussian
-    sigma: 0.05
+    sigma: 0.0
   operator:
     name: gaussian_blur
     kernel_size: 61

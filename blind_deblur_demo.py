@@ -12,7 +12,7 @@ from guided_diffusion.blind_condition_methods import get_conditioning_method
 from guided_diffusion.measurements import get_operator, get_noise
 
 # Here replaces the regular unet by our trained unet
-# from guided_diffusion.unet import create_model
+from guided_diffusion.unet import create_model
 import guided_diffusion.diffusion_model_unet 
 import guided_diffusion.unet
 
@@ -39,7 +39,7 @@ def main():
     
     # Training
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--save_dir', type=str, default='./results/ffhq/ablation/rl-diffusion-dps-refinement/')
+    parser.add_argument('--save_dir', type=str, default='./results/ffhq/debug/')
     
     # Regularization
     parser.add_argument('--reg_scale', type=float, default=0.1)
@@ -67,8 +67,8 @@ def main():
     args.intensity = task_config["measurement"]["operator"]["intensity"]
     
     # Load model
-    # img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
-    img_model = guided_diffusion.unet.create_model(**img_model_config)
+    img_model = guided_diffusion.diffusion_model_unet.create_model(**img_model_config)
+    # img_model = guided_diffusion.unet.create_model(**img_model_config)
     img_model = img_model.to(device)
     img_model.eval()
     
@@ -120,12 +120,12 @@ def main():
     data_config = task_config['data']
     transform = transforms.Compose([transforms.ToTensor(),
                                     # transforms.Grayscale(num_output_channels=3),
-                                    transforms.Resize((256, 256)),
-                                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                                    # transforms.Resize((256, 256)),
+                                    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
                                     # Careful with the normalization, it caused the reconstruction to fail
                                     # transforms.Normalize(0.5, 0.5)
-                                    
                                     ])
+    
     dataset = get_dataset(**data_config, transforms=transform)
     loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
@@ -136,7 +136,7 @@ def main():
     
     # Do Inference
     for i, ref_img in enumerate(loader):
-        if(i==20):
+        if(i == 0):
             logger.info(f"Inference for image {i}")
             fname = str(i).zfill(5) + '.png'
             ref_img = ref_img.to(device)
@@ -166,22 +166,22 @@ def main():
                     logger.info(f"{k} will use uniform prior.")
         
             # sample 
-            sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=False, save_root=out_path, gt=ref_img)
+            sample, norms = sample_fn(x_start=x_start, measurement=y_n, record=True, save_root=out_path, gt=ref_img)
 
             plt.imsave(os.path.join(out_path, 'input', fname), clear_color(y_n))
             plt.imsave(os.path.join(out_path, 'label', fname), clear_color(ref_img))
             plt.imsave(os.path.join(out_path, 'recon', fname), clear_color(sample['img']))
 
-            # plt.plot(range(sampler.num_timesteps), norms)
-            # plt.xlabel('Iteration Index')
-            # plt.ylabel('Norm')
-            # plt.ylim(bottom=0, top=max(norms))  # Set the Y-axis range
+            plt.plot(range(sampler.num_timesteps), norms)
+            plt.xlabel('Iteration Index')
+            plt.ylabel('Norm')
+            plt.ylim(bottom=0, top=max(norms))  # Set the Y-axis range
             
-            # save_dir = os.path.join(out_path, f'progress_norm/')
-            # if not os.path.isdir(save_dir):
-            #     os.makedirs(save_dir, exist_ok=True)
-            # plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
-            # plt.close()
+            save_dir = os.path.join(out_path, f'progress_norm/')
+            if not os.path.isdir(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, f'norm_{fname}'))
+            plt.close()
 
         
 if __name__ == '__main__':
